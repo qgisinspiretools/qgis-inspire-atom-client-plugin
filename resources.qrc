@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/inspireatomclient" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
