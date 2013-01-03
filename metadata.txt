@@ -9,10 +9,9 @@
 name=INSPIRE Atom Client
 description=Client for INSPIRE Downloadservices based on ATOM-Feeds
 category=Web
-version=0.5.1
+version=0.6.0
 qgisMinimumVersion=1.7.4
 class_name=InspireAtomClient
 website=http://www.weichand.de
-[author]
-name=Juergen Weichand
+author=Juergen Weichand
 email=juergen@weichand.de

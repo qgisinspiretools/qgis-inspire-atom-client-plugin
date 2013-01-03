@@ -70,7 +70,7 @@ class InspireAtomClient:
 
 
     def about(self):
-        infoString = "<table><tr><td colspan=\"2\"><b>INSPIRE Atom Client 0.5.1</b></td></tr><tr><td colspan=\"2\">Experimental Plugin</td></tr><tr><td colspan=\"2\"></td></tr><tr><td>Author:</td><td>J&uuml;rgen Weichand</td></tr><tr><td>Mail:</td><td><a href=\"mailto:juergen@weichand.de\">juergen@weichand.de</a></td></tr><tr><td>Website:</td><td><a href=\"http://www.weichand.de\">http://www.weichand.de</a></td></tr></table>"
+        infoString = "<table><tr><td colspan=\"2\"><b>INSPIRE Atom Client 0.6.0</b></td></tr><tr><td colspan=\"2\">Experimental Plugin</td></tr><tr><td colspan=\"2\"></td></tr><tr><td>Author:</td><td>J&uuml;rgen Weichand</td></tr><tr><td>Mail:</td><td><a href=\"mailto:juergen@weichand.de\">juergen@weichand.de</a></td></tr><tr><td>Website:</td><td><a href=\"http://www.weichand.de\">http://www.weichand.de</a></td></tr></table>"
         QMessageBox.information(self.iface.mainWindow(), "About INSPIRE Atom Client", infoString)
 
     # run method that performs all the real work
