@@ -83,10 +83,10 @@ class InspireAtomClientDialog(QtGui.QDialog):
     def get_service_feed(self):
         self.init_variables()
         try:
-            self.onlineresource = self.ui.txtUrl.text().trimmed()
+            self.onlineresource = self.ui.txtUrl.text().strip()
             request = unicode(self.onlineresource)
             if self.ui.chkAuthentication.isChecked():
-                self.setup_urllib2(request, self.ui.txtUsername.text().trimmed(), self.ui.txtPassword.text().trimmed())
+                self.setup_urllib2(request, self.ui.txtUsername.text().strip(), self.ui.txtPassword.text().strip())
             else:
                 self.setup_urllib2(request, "", "")
             response = urllib2.urlopen(request, None, 10)
@@ -142,8 +142,8 @@ class InspireAtomClientDialog(QtGui.QDialog):
             map = feat.attributeMap()                
             if self.validate_feature(map, provider):
                 num_features_validated += 1
-                self.ui.cmbDatasets.addItem(unicode(map[provider.fieldNameIndex("title")].toString()), unicode(map[provider.fieldNameIndex("title")].toString()))                
-                self.datasetindexes[unicode(map[provider.fieldNameIndex("title")].toString())] = dataset_index
+                self.ui.cmbDatasets.addItem(unicode(map[provider.fieldNameIndex("title")]), unicode(map[provider.fieldNameIndex("title")]))                
+                self.datasetindexes[unicode(map[provider.fieldNameIndex("title")])] = dataset_index
                 dataset_index += 1
             else:
                 num_features_not_validated += 1
@@ -161,13 +161,13 @@ class InspireAtomClientDialog(QtGui.QDialog):
         try:
             # Dataset Identifier 
             if provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code") > -1:
-                if len(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")].toString())) > 0:                
+                if len(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")])) > 0:                
                     # Dataset Title
                     if provider.fieldNameIndex("title") > -1:
-                       if len(unicode(map[provider.fieldNameIndex("title")].toString())) > 0:
+                       if len(unicode(map[provider.fieldNameIndex("title")])) > 0:
                            # Datasetfeed Link
                            for key, value in map.items():                        
-                               if value.toString() == "alternate":
+                               if value == "alternate":
                                    fieldname = provider.fields()[key].name().replace("rel", "href")
                                    if provider.fieldNameIndex(fieldname) > -1:                                       
                                        return True 
@@ -197,7 +197,7 @@ class InspireAtomClientDialog(QtGui.QDialog):
             map = feat.attributeMap()               
             if len(self.ui.cmbDatasets.currentText()) > 0:
                 try:
-                    if unicode(map[provider.fieldNameIndex("title")].toString()) == unicode(self.ui.cmbDatasets.currentText()):
+                    if unicode(map[provider.fieldNameIndex("title")]) == unicode(self.ui.cmbDatasets.currentText()):
                         self.handle_dataset_selection(map, provider)
                         selectList.append(feat.id())
                 except KeyError, e:
@@ -258,24 +258,24 @@ class InspireAtomClientDialog(QtGui.QDialog):
             QtGui.QMessageBox.critical(self, "INSPIRE Service Feed Entry Error", "Unable to process selected INSPIRE Service Feed Entry!")
             return
 
-        dataset = inspireatomlib.Dataset(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")].toString()))
-        dataset.setTitle(unicode(map[provider.fieldNameIndex("title")].toString()))
+        dataset = inspireatomlib.Dataset(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")]))
+        dataset.setTitle(unicode(map[provider.fieldNameIndex("title")]))
 
         if provider.fieldNameIndex("summary") > -1:
-            dataset.setSummary(unicode(map[provider.fieldNameIndex("summary")].toString()))                    
+            dataset.setSummary(unicode(map[provider.fieldNameIndex("summary")]))                    
         if provider.fieldNameIndex("rights") > -1:
-            dataset.setRights(unicode(map[provider.fieldNameIndex("rights")].toString()))
+            dataset.setRights(unicode(map[provider.fieldNameIndex("rights")]))
         
         for key, value in map.items():                        
-            if value.toString() == "alternate":
+            if value == "alternate":
                 fieldname = provider.fields()[key].name().replace("rel", "href")
                 if provider.fieldNameIndex(fieldname) > -1:
-                    linksubfeed = unicode(map[provider.fieldNameIndex(fieldname)].toString())
+                    linksubfeed = unicode(map[provider.fieldNameIndex(fieldname)])
                     dataset.setLinkSubfeed(self.buildurl(linksubfeed))
-            if value.toString() == "describedby":
+            if value == "describedby":
                 fieldname = provider.fields()[key].name().replace("rel", "href")
                 if provider.fieldNameIndex(fieldname) > -1:
-                    linkmetadata = unicode(map[provider.fieldNameIndex(fieldname)].toString())
+                    linkmetadata = unicode(map[provider.fieldNameIndex(fieldname)])
                     dataset.setLinkMetadata(self.buildurl(linkmetadata))
         
         self.ui.cmbDatasets.setCurrentIndex(self.datasetindexes[dataset.getTitle()])
@@ -304,7 +304,7 @@ class InspireAtomClientDialog(QtGui.QDialog):
     def receive_dataset_representations(self, subfeedurl): 
         try:
             if self.ui.chkAuthentication.isChecked():
-                self.setup_urllib2(subfeedurl, self.ui.txtUsername.text().trimmed(), self.ui.txtPassword.text().trimmed())
+                self.setup_urllib2(subfeedurl, self.ui.txtUsername.text().strip(), self.ui.txtPassword.text().strip())
             else:
                 self.setup_urllib2(subfeedurl, "", "")
             response = urllib2.urlopen(subfeedurl, None, 10)
@@ -526,8 +526,8 @@ class InspireAtomClientDialog(QtGui.QDialog):
 
     # Receive Proxy from QGIS-Settings
     def getProxy(self):
-        if self.settings.value("/proxy/proxyEnabled").toString() == "true":
-           proxy = "{0}:{1}".format(self.settings.value("/proxy/proxyHost").toString(), self.settings.value("/proxy/proxyPort").toString())
+        if self.settings.value("/proxy/proxyEnabled") == "true":
+           proxy = "{0}:{1}".format(self.settings.value("/proxy/proxyHost"), self.settings.value("/proxy/proxyPort"))
            if proxy.startswith("http://"):
                return proxy
            else:
@@ -660,7 +660,7 @@ class InspireAtomClientDialog(QtGui.QDialog):
         self.httpRequestAborted = False
         # Download the file.
         self.ui.progressBar.setVisible(True)
-        self.httpGetId = self.http.get(url.toString(), self.outFile)
+        self.httpGetId = self.http.get(url, self.outFile)
 
 
     # currently unused
@@ -721,7 +721,7 @@ class InspireAtomClientDialog(QtGui.QDialog):
 
     def authenticationRequired(self, hostName, _, authenticator):
         self.http.authenticationRequired.disconnect(self.authenticationRequired)
-        authenticator.setUser(self.ui.txtUsername.text().trimmed())
-        authenticator.setPassword(self.ui.txtPassword.text().trimmed())
+        authenticator.setUser(self.ui.txtUsername.text().strip())
+        authenticator.setPassword(self.ui.txtPassword.text().strip())
 
     

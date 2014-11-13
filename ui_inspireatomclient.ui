@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>INSPIRE Atom Client 0.6.0</string>
+   <string>INSPIRE Atom Client 0.7.0</string>
   </property>
   <widget class="QLabel" name="lblUrl">
    <property name="geometry">
