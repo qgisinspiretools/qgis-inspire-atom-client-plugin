@@ -77,7 +77,7 @@ class InspireAtomClient:
     def run(self):
 
         # create and show the dialog
-        dlg = InspireAtomClientDialog(self)
+        dlg = InspireAtomClientDialog(self.iface)
         # show the dialog
         dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
         dlg.show()
