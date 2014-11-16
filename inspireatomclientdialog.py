@@ -42,10 +42,678 @@ plugin_path = os.path.abspath(os.path.dirname(__file__))
 
 class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def __init__(self, iface, parent=None):
-        #QDialog.__init__(self)
         super(InspireAtomClientDialog, self).__init__(parent)
-        #self.parent = parent
-        #self = Ui_InspireAtomClient()
         self.setupUi(self)
+        self.iface = iface
+        
+        self.settings = QSettings()
 
         self.settings = QSettings()
+        self.init_variables()
+
+        self.txtUsername.setVisible(False)
+        self.txtPassword.setVisible(False)
+        self.lblUsername.setVisible(False)
+        self.lblPassword.setVisible(False)
+
+        # Connect signals
+        QObject.connect(self.cmdGetFeed, SIGNAL("clicked()"), self.get_service_feed)
+        QObject.connect(self.cmdSelectDataset, SIGNAL("clicked()"), self.select_dataset_feed_byclick)
+        QObject.connect(self.cmdDownload, SIGNAL("clicked()"), self.download_files)
+        QObject.connect(self.cmdMetadata, SIGNAL("clicked()"), self.show_metadata)
+        QObject.connect(self.chkAuthentication, SIGNAL("clicked()"), self.update_authentication)
+        QObject.connect(self.cmbDatasets, SIGNAL("currentIndexChanged(int)"), self.select_dataset_feed_bylist)
+        QObject.connect(self.cmbDatasetRepresentations, SIGNAL("currentIndexChanged(int)"), self.update_lw_files)
+
+    def init_variables(self):
+        self.onlineresource = ""
+        self.layername = ""
+        self.datasetindexes = {}       
+        self.datasetrepresentations = {}
+        self.currentfile = 0
+        self.currentmetadata = ""
+
+    """
+    ############################################################################################################################
+    # ATOM Feed
+    ############################################################################################################################
+    """
+
+    # request and handle "Service Feed" - Get Metadata | cmdGetFeed Signal
+    def get_service_feed(self):
+        self.init_variables()
+        try:
+            self.onlineresource = self.txtUrl.text().strip()
+            request = unicode(self.onlineresource)
+            if self.chkAuthentication.isChecked():
+                self.setup_urllib2(request, self.txtUsername.text().strip(), self.txtPassword.text().strip())
+            else:
+                self.setup_urllib2(request, "", "")
+            response = urllib2.urlopen(request, None, 10)
+            buf = response.read()
+            #QMessageBox.information(self, "Debug", buf)
+        except urllib2.HTTPError, e:  
+            QMessageBox.critical(self, "HTTP Error", "HTTP Error: {0}".format(e.code))
+            if e.code == 401:
+                self.chkAuthentication.setChecked(True)
+                self.update_authentication()
+        except urllib2.URLError, e:
+            QMessageBox.critical(self, "URL Error", "URL Error: {0}".format(e.reason))
+        else:
+            layername="INSPIRE_DLS#{0}".format(''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6)))
+            tmpfile = self.save_tempfile("{0}.xml".format(layername), buf)
+            vlayer = QgsVectorLayer(tmpfile, layername, "ogr")
+            vlayer.setProviderEncoding("UTF-8") #Ignore System Encoding --> TODO: Use XML-Header
+            if not vlayer.isValid():
+                QMessageBox.critical(self, "QGIS-Layer Error", "Response is not a valid QGIS-Layer!")
+            else: 
+                self.add_layer(vlayer)
+                self.layername = vlayer.name()
+                self.iface.zoomToActiveLayer()
+                self.clear_frame()
+                self.update_cmbDatasets()
+                
+                # Lock
+                self.cmdGetFeed.setEnabled(False)
+                self.chkAuthentication.setEnabled(False)
+                self.txtUrl.setEnabled(False)
+                self.txtUsername.setEnabled(False)
+                self.txtPassword.setEnabled(False)
+
+    # update cmbDatasets
+    def update_cmbDatasets(self):
+        self.is_cmbDatasets_locked = True
+        self.cmbDatasets.clear()
+        self.cmdSelectDataset.setEnabled(False)
+        # get currentLayer and dataProvider
+        cLayer = self.iface.mapCanvas().currentLayer()
+        if cLayer.type() != QgsMapLayer.VectorLayer:
+            return 
+        selectList = []
+        provider = cLayer.dataProvider()
+        feat = QgsFeature()
+        # create the select statement
+        provider.select(provider.attributeIndexes())
+        num_features_validated = 0
+        num_features_not_validated = 0
+        dataset_index = 0
+        while provider.nextFeature(feat):
+            map = feat.attributeMap()                
+            if self.validate_feature(map, provider):
+                num_features_validated += 1
+                self.cmbDatasets.addItem(unicode(map[provider.fieldNameIndex("title")]), unicode(map[provider.fieldNameIndex("title")]))                
+                self.datasetindexes[unicode(map[provider.fieldNameIndex("title")])] = dataset_index
+                dataset_index += 1
+            else:
+                num_features_not_validated += 1
+
+        if num_features_validated == 0:
+            QMessageBox.critical(self, "INSPIRE Service Feed Error", "Unable to process INSPIRE Service Feed!")
+        else:        
+            self.cmdSelectDataset.setEnabled(True)
+            self.is_cmbDatasets_locked = False
+            self.select_dataset_feed_bylist()
+ 
+
+    # check "Service Feed Entry" for Identifier, Title, Dataset Feed Link
+    def validate_feature(self, map, provider):
+        try:
+            # Dataset Identifier 
+            if provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code") > -1:
+                if len(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")])) > 0:                
+                    # Dataset Title
+                    if provider.fieldNameIndex("title") > -1:
+                       if len(unicode(map[provider.fieldNameIndex("title")])) > 0:
+                           # Datasetfeed Link
+                           for key, value in map.items():                        
+                               if value == "alternate":
+                                   fieldname = provider.fields()[key].name().replace("rel", "href")
+                                   if provider.fieldNameIndex(fieldname) > -1:                                       
+                                       return True 
+            return False 
+        except KeyError, e:
+            return False
+
+
+    # select "Dataset Feed" | cmbDatasets "currentIndexChanged(int)" Signal
+    def select_dataset_feed_bylist(self):
+        if self.is_cmbDatasets_locked:
+            return
+        self.clear_frame()
+        self.lblMessage.setText("")
+        cLayer = self.iface.mapCanvas().currentLayer()
+        if not cLayer.name() == self.layername:
+            QMessageBox.critical(self, "QGIS-Layer Error", "Selected Layer isn't the INSPIRE Service Feed!")
+            return 
+        if cLayer.type() != QgsMapLayer.VectorLayer:
+            return 
+        selectList = []
+        provider = cLayer.dataProvider()
+        feat = QgsFeature()
+        # create the select statement
+        provider.select(provider.attributeIndexes())
+        while provider.nextFeature(feat):            
+            map = feat.attributeMap()               
+            if len(self.cmbDatasets.currentText()) > 0:
+                try:
+                    if unicode(map[provider.fieldNameIndex("title")]) == unicode(self.cmbDatasets.currentText()):
+                        self.handle_dataset_selection(map, provider)
+                        selectList.append(feat.id())
+                except KeyError, e:
+                    self.lblMessage.setText("") # TODO: exception handling
+
+        # make the actual selection
+        cLayer.setSelectedFeatures(selectList)
+
+
+    # select "Dataset Feed" | cmdSelectDataset Signal
+    def select_dataset_feed_byclick(self):
+        self.clear_frame()
+        self.lblMessage.setText("")
+        # http://www.qgisworkshop.org/html/workshop/plugins_tutorial.html
+        result = QObject.connect(self.parent.clickTool, SIGNAL("canvasClicked(const QgsPoint &, Qt::MouseButton)"), self.select_dataset_feed_byclick_procedure)
+        self.iface.mapCanvas().setMapTool(self.parent.clickTool)
+
+
+    # select "Dataset Feed" | Signal ("Click")
+    def select_dataset_feed_byclick_procedure(self, point, button):
+        self.clear_frame()
+        # setup the provider select to filter results based on a rectangle
+        pntGeom = QgsGeometry.fromPoint(point)  
+        # scale-dependent buffer of 2 pixels-worth of map units
+        pntBuff = pntGeom.buffer( (self.iface.mapCanvas().mapUnitsPerPixel() * 2), 0) 
+        rect = pntBuff.boundingBox()
+        # get currentLayer and dataProvider
+        cLayer = self.iface.mapCanvas().currentLayer()
+        if not cLayer.name() == self.layername:
+            QMessageBox.critical(self, "QGIS-Layer Error", "Selected Layer isn't the INSPIRE Service Feed!")
+            result = QObject.disconnect(self.parent.clickTool, SIGNAL("canvasClicked(const QgsPoint &, Qt::MouseButton)"), self.select_dataset_feed_byclick_procedure)
+            self.iface.mapCanvas().unsetMapTool(self.parent.clickTool)
+            return 
+        if cLayer.type() != QgsMapLayer.VectorLayer:
+            return 
+        selectList = []
+        provider = cLayer.dataProvider()
+        feat = QgsFeature()
+        # create the select statement
+        provider.select(provider.attributeIndexes(), rect)
+        while provider.nextFeature(feat):
+            # if the feat geom returned from the selection intersects our point then put it in a list
+            if feat.geometry().intersects(pntGeom):
+                selectList.append(feat.id())
+                map = feat.attributeMap() 
+                self.handle_dataset_selection(map, provider)
+                break 
+                    
+        # make the actual selection
+        cLayer.setSelectedFeatures(selectList)
+        result = QObject.disconnect(self.parent.clickTool, SIGNAL("canvasClicked(const QgsPoint &, Qt::MouseButton)"), self.select_dataset_feed_byclick_procedure)
+        self.iface.mapCanvas().unsetMapTool(self.parent.clickTool)
+
+
+    # handle selection | selected by list or by click
+    def handle_dataset_selection(self, map, provider):
+        if not self.validate_feature(map, provider):
+            QMessageBox.critical(self, "INSPIRE Service Feed Entry Error", "Unable to process selected INSPIRE Service Feed Entry!")
+            return
+
+        dataset = inspireatomlib.Dataset(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")]))
+        dataset.setTitle(unicode(map[provider.fieldNameIndex("title")]))
+
+        if provider.fieldNameIndex("summary") > -1:
+            dataset.setSummary(unicode(map[provider.fieldNameIndex("summary")]))                    
+        if provider.fieldNameIndex("rights") > -1:
+            dataset.setRights(unicode(map[provider.fieldNameIndex("rights")]))
+        
+        for key, value in map.items():                        
+            if value == "alternate":
+                fieldname = provider.fields()[key].name().replace("rel", "href")
+                if provider.fieldNameIndex(fieldname) > -1:
+                    linksubfeed = unicode(map[provider.fieldNameIndex(fieldname)])
+                    dataset.setLinkSubfeed(self.buildurl(linksubfeed))
+            if value == "describedby":
+                fieldname = provider.fields()[key].name().replace("rel", "href")
+                if provider.fieldNameIndex(fieldname) > -1:
+                    linkmetadata = unicode(map[provider.fieldNameIndex(fieldname)])
+                    dataset.setLinkMetadata(self.buildurl(linkmetadata))
+        
+        self.cmbDatasets.setCurrentIndex(self.datasetindexes[dataset.getTitle()])
+        self.cmbDatasetRepresentations.clear()
+#        self.frmDataset.setEnabled(True) # beide groupbox disablen/enablen
+        self.lblTitle.setText(dataset.getTitle())
+        self.txtSummary.setPlainText(dataset.getSummary())
+        self.txtId.setPlainText(dataset.getId())
+        self.txtRights.setPlainText(dataset.getRights())                    
+        
+        if dataset.getLinkMetadata():
+            if len(dataset.getLinkMetadata()) > 0:
+                self.cmdMetadata.setEnabled(True)
+                self.currentmetadata = dataset.getLinkMetadata()
+            else: 
+                self.cmdMetadata.setEnabled(False)
+                self.currentmetadata = ""
+        else:
+            self.cmdMetadata.setEnabled(False)
+            self.currentmetadata = ""
+
+        self.receive_dataset_representations(dataset.getLinkSubfeed())
+
+
+    # request and handle "Dataset Feed" (dataset representations)
+    def receive_dataset_representations(self, subfeedurl): 
+        try:
+            if self.chkAuthentication.isChecked():
+                self.setup_urllib2(subfeedurl, self.txtUsername.text().strip(), self.txtPassword.text().strip())
+            else:
+                self.setup_urllib2(subfeedurl, "", "")
+            response = urllib2.urlopen(subfeedurl, None, 10)
+            buf = response.read()
+        except urllib2.HTTPError, e:  
+            QMessageBox.critical(self, "HTTP Error", "HTTP Error: {0}".format(e.code))
+        except urllib2.URLError, e:
+            QMessageBox.critical(self, "URL Error", "URL Error: {0}".format(e.reason))
+        else:
+            self.datasetrepresentations = {}
+            root = ElementTree.fromstring(buf)
+            # ATOM Namespace
+            namespace = "{http://www.w3.org/2005/Atom}"
+            # check correct Rootelement 
+            if root.tag == "{0}feed".format(namespace):       
+                for target in root.findall("{0}entry".format(namespace)):
+                    idvalue = ""
+                    for id in target.findall("{0}id".format(namespace)):
+                        idvalue = id.text
+                    if (idvalue):
+                        datasetrepresentation = inspireatomlib.DatasetRepresentation(idvalue)
+                        for title in target.findall("{0}title".format(namespace)):
+                            datasetrepresentation.setTitle(title.text)
+                        files = []
+                        for link in target.findall("{0}link".format(namespace)):
+                            if link.get("rel") == "alternate":
+                                files.append(self.buildurl(link.get("href")))                           
+                            if link.get("rel") == "section":
+                                files.append(self.buildurl(link.get("href")))
+                        datasetrepresentation.setFiles(files)
+                        self.datasetrepresentations[QString(datasetrepresentation.getTitle())] = datasetrepresentation
+                        self.cmbDatasetRepresentations.addItem(datasetrepresentation.getTitle(), datasetrepresentation.getTitle())
+                        self.cmdDownload.setEnabled(True)
+            
+            else:
+                QMessageBox.critical(self, "INSPIRE Dataset Feed Error", "Unable to process INSPIRE Dataset Feed!") 
+
+    # update ListWidget | cmbDatasetRepresentations "currentIndexChanged(int)" Signal
+    def update_lw_files(self):
+        self.lwFiles.clear()
+        if len(self.cmbDatasetRepresentations.currentText()) > 0:
+            datasetrepresentation = self.datasetrepresentations[self.cmbDatasetRepresentations.currentText()]
+            for file in datasetrepresentation.getFiles():                
+                self.lwFiles.addItem(file)
+
+    def clear_frame(self):
+        self.lblTitle.setText("Title")
+        self.txtSummary.setPlainText("")
+        self.txtId.setText("")
+        self.txtRights.setPlainText("")
+        self.cmbDatasetRepresentations.clear()
+        self.lwFiles.clear()
+        self.cmdDownload.setEnabled(False)
+        self.cmdMetadata.setEnabled(False)
+#        self.frmDataset.setEnabled(False) # groupBox disable?
+
+    def show_metadata(self):
+        if len(self.currentmetadata) > 0:
+            xslfilename = os.path.join(plugin_path, "iso19139jw.xsl")
+            html = self.xsl_transform(self.currentmetadata, xslfilename)
+       
+            if html:
+                # create and show the dialog
+                dlg = MetadataClientDialog()
+                dlg.wvMetadata.setHtml(html)
+                dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
+                # show the dialog
+                dlg.show()
+                result = dlg.exec_()
+                # See if OK was pressed
+                if result == 1:
+                    # do something useful (delete the line containing pass and
+                    # substitute with your code
+                    pass
+            else:
+                QMessageBox.critical(self, "Metadata Error", "Unable to read the Metadata")
+
+
+    # UI: Update Main-Frame / Enable|Disable Authentication
+    def update_authentication(self):
+        if not self.chkAuthentication.isChecked():
+            self.frmMain.setGeometry(QRect(0,90,511,631))
+            self.txtUsername.setVisible(False)
+            self.txtPassword.setVisible(False)
+            self.lblUsername.setVisible(False)
+            self.lblPassword.setVisible(False)
+            self.resize(520, 725)
+        else:
+            self.frmMain.setGeometry(QRect(0,150,511,631))
+            self.txtUsername.setVisible(True)
+            self.txtPassword.setVisible(True)
+            self.lblUsername.setVisible(True)
+            self.lblPassword.setVisible(True)
+            self.resize(520, 781)
+
+    """
+    ############################################################################################################################
+    # Download
+    ############################################################################################################################
+    """
+   
+    # execute download procedure | cmdDownload Signal
+    def download_files(self):
+        self.lblMessage.setText("")
+
+        self.httpGetId = 0
+        self.httpRequestAborted = False
+        self.downloadedfiles = []
+
+        self.setup_qhttp()
+        self.http.requestFinished.connect(self.httpRequestFinished)
+        self.http.dataReadProgress.connect(self.updateDataReadProgress)
+        self.http.responseHeaderReceived.connect(self.readResponseHeader)
+        if self.chkAuthentication.isChecked():
+            self.http.authenticationRequired.connect(self.authenticationRequired)
+
+        self.download_next()
+
+    # download next file (after finishing the last one)
+    def download_next(self):
+       datasetrepresentation = self.datasetrepresentations[self.cmbDatasetRepresentations.currentText()]
+       if self.currentfile < len(datasetrepresentation.getFiles()):
+           self.cmdGetFeed.setEnabled(False)
+           self.cmdDownload.setEnabled(False)
+           self.cmdSelectDataset.setEnabled(False)
+           self.cmdMetadata.setEnabled(False)
+           self.cmbDatasets.setEnabled(False)
+           self.cmbDatasetRepresentations.setEnabled(False)
+           self.lwFiles.setItemSelected(self.lwFiles.item(self.currentfile), True)
+           self.cmdDownload.setText("Downloading {0}/{1}".format(self.currentfile + 1, len(datasetrepresentation.getFiles())))
+           file = datasetrepresentation.getFiles()[self.currentfile]
+           filename=self.buildfilename(file)
+           self.downloadFile(file, self.get_temppath(filename))
+           self.currentfile += 1
+       else:
+           self.load_downloaded_files()
+           self.reset_ui_download()
+
+    # try to load downloaded files as QGIS-Layer(s)
+    def load_downloaded_files(self):
+        failed = []
+        successful = []
+        for file in self.downloadedfiles:
+            vlayer = QgsVectorLayer(file, file, "ogr")            
+            if not vlayer.isValid():
+                #fileInfo = QFileInfo(file)
+                #baseName = fileInfo.baseName()
+                rlayer = QgsRasterLayer(file, file)   
+                if not rlayer.isValid():
+                    failed.append(file)
+                    self.lblMessage.setText("")
+                else:
+                    self.add_layer(rlayer)
+                    self.iface.zoomToActiveLayer()
+                    successful.append(file)
+            else: 
+                self.lblMessage.setText("")
+                self.add_layer(vlayer)
+                self.iface.zoomToActiveLayer()
+                successful.append(file)
+        
+        message = ""
+        if len(successful) > 0:
+            message += "<p><b>Successfully loaded:</b><br />"
+            for file in successful:
+                message += file + "<br />"
+            message += "</p>"        
+        if len(failed) > 0:
+            message += "<p><b>Failed to load:</b><br />"
+            for file in failed:
+                message += file + "<br />"
+            message += "</p>"
+        QMessageBox.information(self, "Import Status", message)
+
+    
+    def reset_ui_download(self):
+        self.cmdDownload.setText("Download")
+        self.cmdDownload.setEnabled(True)
+        self.cmdSelectDataset.setEnabled(True)
+        self.cmbDatasets.setEnabled(True)
+        self.cmbDatasetRepresentations.setEnabled(True)
+        self.currentfile = 0
+        if len(self.currentmetadata) > 0:
+            self.cmdMetadata.setEnabled(True)
+
+
+    def add_layer(self, layer):
+        QgsMapLayerRegistry.instance().addMapLayer(layer)
+
+    """
+    ############################################################################################################################
+    # UTIL
+    ############################################################################################################################
+    """
+
+    def get_temppath(self, filename):
+        tmpdir = os.path.join(tempfile.gettempdir(),'inspireatomclient')
+        if not os.path.exists(tmpdir):
+            os.makedirs(tmpdir)
+        tmpfile= os.path.join(tmpdir, filename)
+        return tmpfile
+
+
+    def save_tempfile(self, filename, content):
+        tmpdir = os.path.join(tempfile.gettempdir(),'inspireatomclient')
+        if not os.path.exists(tmpdir):
+            os.makedirs(tmpdir)
+        tmpfile= os.path.join(tmpdir, filename)
+        fobj=open(tmpfile,'wb')
+        fobj.write(content)
+        fobj.close()  
+        return tmpfile
+
+
+    # Receive Proxy from QGIS-Settings
+    def getProxy(self):
+        if self.settings.value("/proxy/proxyEnabled") == "true":
+           proxy = "{0}:{1}".format(self.settings.value("/proxy/proxyHost"), self.settings.value("/proxy/proxyPort"))
+           if proxy.startswith("http://"):
+               return proxy
+           else:
+               return "http://" + proxy
+        else: 
+            return ""
+
+
+    # Setup urllib2 (Proxy)
+    def setup_urllib2(self, request, username, password):
+        # with Authentication
+        if username and len(username) > 0:
+            if password and len(password) > 0:
+                password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+                password_mgr.add_password(None, request, username, password)
+                auth_handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+
+                if not self.getProxy() == "":
+                    proxy_handler = urllib2.ProxyHandler({"http" : self.getProxy()})
+                else:
+                    proxy_handler = urllib2.ProxyHandler({})
+                opener = urllib2.build_opener(proxy_handler, auth_handler)
+                urllib2.install_opener(opener)
+
+        # without Authentication
+        else:
+            if not self.getProxy() == "":
+                proxy_handler = urllib2.ProxyHandler({"http" : self.getProxy()})
+            else:
+                proxy_handler = urllib2.ProxyHandler({})
+            opener = urllib2.build_opener(proxy_handler)
+            urllib2.install_opener(opener)
+
+
+    # Setup Qhttp (Proxy)
+    def setup_qhttp(self):
+        self.http = QHttp(self)
+        if not self.getProxy() == "":
+            self.http.setProxy(QgsNetworkAccessManager.instance().fallbackProxy()) # Proxy       
+
+
+    # Convert relative links to absolute link
+    def buildurl(self, urlfragment):
+        if not urlfragment.startswith("http"):
+            return urljoin(unicode(self.onlineresource), urlfragment)
+        return urlfragment
+
+
+    # Build filename for downloaded file
+    def buildfilename(self, url):
+        parseresult = urlparse(url)
+        if len(parseresult.query) == 0:
+            path = parseresult.path
+            filename = path[path.rfind("/") + 1:]
+        else:
+            # TODO: use Mime-Type
+            extension="ext"
+            if url.lower().find("tif") > -1:
+                extension="tiff"
+            elif url.lower().find("gml") > -1:
+                extension="gml"
+            elif url.lower().find("kml") > -1:
+                extension="kml"
+
+            elif url.lower().find("wfs") > -1:
+                extension="gml"
+            elif url.lower().find("wms") > -1:
+                extension="tiff"
+            elif url.lower().find("wcs") > -1:
+                extension="tiff"
+            filename="{0}.{1}".format(''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6)), extension)
+        return filename
+
+
+    # XSL Transformation
+    def xsl_transform(self, url, xslfilename):
+        try:
+            self.setup_urllib2(url, "", "")
+            response = urllib2.urlopen(url, None, 10)
+            buf = response.read()
+        except urllib2.HTTPError, e:  
+            QMessageBox.critical(self, "HTTP Error", "HTTP Error: {0}".format(e.code))
+        except urllib2.URLError, e:
+            QMessageBox.critical(self, "URL Error", "URL Error: {0}".format(e.reason))
+        else:
+           # load xslt
+           xslt_file = QFile(xslfilename)
+           xslt_file.open(QIODevice.ReadOnly)
+           xslt = QString(xslt_file.readAll())
+           xslt_file.close()
+ 
+           # load xml
+           xml_source = QString.fromUtf8(buf)
+
+           # xslt
+           qry = QtXmlPatterns.QXmlQuery(QtXmlPatterns.QXmlQuery.XSLT20)
+           qry.setFocus(xml_source)
+           qry.setQuery(xslt)
+
+           array = QByteArray()
+           buf = QBuffer(array)
+           buf.open(QIODevice.WriteOnly)
+           qry.evaluateTo(buf)
+           xml_target = QString.fromUtf8(array)
+           return xml_target
+
+
+    #############################################################################################################
+    # QHttp GetFeature-Request - http://stackoverflow.com/questions/6852038/threading-in-pyqt4
+    #############################################################################################################
+
+    def downloadFile(self, httplink, fileName):
+        #self.lock_ui()
+        url = QUrl(httplink)
+
+        if QFile.exists(fileName):
+            QFile.remove(fileName)
+
+        self.outFile = QFile(fileName)
+        if not self.outFile.open(QtCore .QIODevice.WriteOnly):
+            QMessageBox.critical(self, "Error", "Unable to save the file %s: %s." % (fileName, self.outFile.errorString()))
+            self.outFile = None
+            return
+
+        mode = QHttp.ConnectionModeHttp
+        port = url.port()
+        if port == -1:
+            port = 0
+        self.http.setHost(url.host(), mode, port)
+        self.httpRequestAborted = False
+        # Download the file.
+        self.progressBar.setVisible(True)
+        self.httpGetId = self.http.get(url, self.outFile)
+
+
+    # currently unused
+    def cancelDownload(self):
+        self.httpRequestAborted = True
+        self.http.abort()
+        self.close()
+
+        self.progressBar.setMaximum(1)
+        self.progressBar.setValue(0)
+        self.unlock_ui()
+
+
+    def httpRequestFinished(self, requestId, error):
+        if requestId != self.httpGetId:
+            return
+
+        if self.httpRequestAborted:
+            if self.outFile is not None:
+                self.outFile.close()
+                self.outFile.remove()
+                self.outFile = None
+            return
+
+        self.outFile.close()
+
+        self.progressBar.setMaximum(1)
+        self.progressBar.setValue(1)
+
+        if error:
+            self.outFile.remove()
+            QMessageBox.critical(self, "Error", "Download failed: %s." % self.http.errorString())
+            self.reset_ui_download()
+        else:      
+            self.lblMessage.setText("")
+            self.downloadedfiles.append(unicode(self.outFile.fileName()))
+            self.download_next()
+
+        self.progressBar.setMaximum(1)
+        self.progressBar.setValue(0)
+
+
+    def readResponseHeader(self, responseHeader):
+        # Check for genuine error conditions.
+        if responseHeader.statusCode() not in (200, 300, 301, 302, 303, 307):
+            QMessageBox.critical(self, "Error", "Download failed: %s." % responseHeader.reasonPhrase())
+            self.httpRequestAborted = True
+            self.http.abort()
+
+
+    def updateDataReadProgress(self, bytesRead, totalBytes):
+        if self.httpRequestAborted:
+            return
+        self.progressBar.setMaximum(totalBytes)
+        self.progressBar.setValue(bytesRead)
+        self.lblMessage.setText("Please wait while downloading - {0} Bytes downloaded!".format(str(bytesRead)))
+
+
+    def authenticationRequired(self, hostName, _, authenticator):
+        self.http.authenticationRequired.disconnect(self.authenticationRequired)
+        authenticator.setUser(self.txtUsername.text().strip())
+        authenticator.setPassword(self.txtPassword.text().strip())
