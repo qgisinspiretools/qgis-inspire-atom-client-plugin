@@ -47,8 +47,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.iface = iface
         
         self.settings = QSettings()
-
-        self.settings = QSettings()
         self.init_variables()
 
         self.txtUsername.setVisible(False)
@@ -133,19 +131,20 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         provider = cLayer.dataProvider()
         feat = QgsFeature()
         # create the select statement
-        provider.select(provider.attributeIndexes())
         num_features_validated = 0
         num_features_not_validated = 0
         dataset_index = 0
-        while provider.nextFeature(feat):
-            map = feat.attributeMap()                
-            if self.validate_feature(map, provider):
+        
+        iter = cLayer.getFeatures()
+        for feature in iter:
+            if self.validate_feature(provider, feature):
+                print "foo"
                 num_features_validated += 1
-                self.cmbDatasets.addItem(unicode(map[provider.fieldNameIndex("title")]), unicode(map[provider.fieldNameIndex("title")]))                
-                self.datasetindexes[unicode(map[provider.fieldNameIndex("title")])] = dataset_index
+                self.cmbDatasets.addItem(unicode(feature.attribute("title")), unicode(feature.attribute("title")))
+                self.datasetindexes[unicode(feature.attribute("title"))] = dataset_index
                 dataset_index += 1
             else:
-                num_features_not_validated += 1
+                 num_features_not_validated += 1
 
         if num_features_validated == 0:
             QMessageBox.critical(self, "INSPIRE Service Feed Error", "Unable to process INSPIRE Service Feed!")
@@ -156,24 +155,25 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
  
 
     # check "Service Feed Entry" for Identifier, Title, Dataset Feed Link
-    def validate_feature(self, map, provider):
+    def validate_feature(self, provider, feature):
         try:
-            # Dataset Identifier 
+            # Dataset Identifier             
             if provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code") > -1:
-                if len(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")])) > 0:                
+                if len(unicode(feature.attribute("inspire_dls_spatial_dataset_identifier_code"))):
                     # Dataset Title
                     if provider.fieldNameIndex("title") > -1:
-                       if len(unicode(map[provider.fieldNameIndex("title")])) > 0:
-                           # Datasetfeed Link
-                           for key, value in map.items():                        
-                               if value == "alternate":
-                                   fieldname = provider.fields()[key].name().replace("rel", "href")
-                                   if provider.fieldNameIndex(fieldname) > -1:                                       
-                                       return True 
-            return False 
+                         if len(unicode(feature.attribute("title"))) > 0:
+                             # Datasetfeed Link
+                             key = 0
+                             for value in feature.attributes():
+                                if value == "alternate":
+                                    fieldname = provider.fields()[key].name().replace("rel", "href")
+                                    if provider.fieldNameIndex(fieldname) > -1:
+                                        return True 
+                                key += 1
+            return False
         except KeyError, e:
             return False
-
 
     # select "Dataset Feed" | cmbDatasets "currentIndexChanged(int)" Signal
     def select_dataset_feed_bylist(self):
