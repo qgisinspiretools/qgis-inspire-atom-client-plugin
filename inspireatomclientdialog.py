@@ -41,10 +41,11 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), 'ui_inspi
 plugin_path = os.path.abspath(os.path.dirname(__file__))
 
 class InspireAtomClientDialog(QDialog, FORM_CLASS):
-    def __init__(self, iface, parent=None):
-        super(InspireAtomClientDialog, self).__init__(parent)
+    def __init__(self, parent):
+        super(InspireAtomClientDialog, self).__init__(None)
         self.setupUi(self)
-        self.iface = iface
+        self.parent = parent
+        self.iface = self.parent.iface
         
         self.settings = QSettings()
         self.init_variables()
@@ -130,7 +131,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         selectList = []
         provider = cLayer.dataProvider()
         feat = QgsFeature()
-        # create the select statement
         num_features_validated = 0
         num_features_not_validated = 0
         dataset_index = 0
@@ -138,7 +138,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         iter = cLayer.getFeatures()
         for feature in iter:
             if self.validate_feature(provider, feature):
-                print "foo"
                 num_features_validated += 1
                 self.cmbDatasets.addItem(unicode(feature.attribute("title")), unicode(feature.attribute("title")))
                 self.datasetindexes[unicode(feature.attribute("title"))] = dataset_index
@@ -189,19 +188,16 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             return 
         selectList = []
         provider = cLayer.dataProvider()
-        feat = QgsFeature()
-        # create the select statement
-        provider.select(provider.attributeIndexes())
-        while provider.nextFeature(feat):            
-            map = feat.attributeMap()               
+
+        iter = cLayer.getFeatures()
+        for feature in iter:
             if len(self.cmbDatasets.currentText()) > 0:
                 try:
-                    if unicode(map[provider.fieldNameIndex("title")]) == unicode(self.cmbDatasets.currentText()):
-                        self.handle_dataset_selection(map, provider)
-                        selectList.append(feat.id())
+                    if unicode(feature.attribute("title")) == unicode(self.cmbDatasets.currentText()):
+                        self.handle_dataset_selection(feature, provider)
+                        selectList.append(feature.id())
                 except KeyError, e:
                     self.lblMessage.setText("") # TODO: exception handling
-
         # make the actual selection
         cLayer.setSelectedFeatures(selectList)
 
@@ -252,39 +248,43 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
 
     # handle selection | selected by list or by click
-    def handle_dataset_selection(self, map, provider):
-        if not self.validate_feature(map, provider):
+    def handle_dataset_selection(self, feature, provider):
+        print "fubar"
+        if not self.validate_feature(provider, feature):
             QMessageBox.critical(self, "INSPIRE Service Feed Entry Error", "Unable to process selected INSPIRE Service Feed Entry!")
             return
 
-        dataset = inspireatomlib.Dataset(unicode(map[provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code")]))
-        dataset.setTitle(unicode(map[provider.fieldNameIndex("title")]))
+        dataset = inspireatomlib.Dataset(unicode(feature.attribute("inspire_dls_spatial_dataset_identifier_code")))
+        dataset.setTitle(unicode(feature.attribute("title")))
 
         if provider.fieldNameIndex("summary") > -1:
-            dataset.setSummary(unicode(map[provider.fieldNameIndex("summary")]))                    
+            dataset.setSummary(unicode(feature.attribute("summary")))                    
         if provider.fieldNameIndex("rights") > -1:
-            dataset.setRights(unicode(map[provider.fieldNameIndex("rights")]))
-        
-        for key, value in map.items():                        
+            dataset.setRights(unicode(feature.attribute("rights")))
+
+        key = 0
+        for value in feature.attributes():
             if value == "alternate":
                 fieldname = provider.fields()[key].name().replace("rel", "href")
                 if provider.fieldNameIndex(fieldname) > -1:
-                    linksubfeed = unicode(map[provider.fieldNameIndex(fieldname)])
+                    linksubfeed = unicode(feature.attribute(fieldname))
                     dataset.setLinkSubfeed(self.buildurl(linksubfeed))
             if value == "describedby":
                 fieldname = provider.fields()[key].name().replace("rel", "href")
                 if provider.fieldNameIndex(fieldname) > -1:
-                    linkmetadata = unicode(map[provider.fieldNameIndex(fieldname)])
+                    linkmetadata = unicode(feature.attribute(fieldname))
                     dataset.setLinkMetadata(self.buildurl(linkmetadata))
-        
+            key += 1
+
         self.cmbDatasets.setCurrentIndex(self.datasetindexes[dataset.getTitle()])
         self.cmbDatasetRepresentations.clear()
-#        self.frmDataset.setEnabled(True) # beide groupbox disablen/enablen
+        self.groupBoxDataset.setEnabled(True)
+        self.groupBoxSelectedDataset.setEnabled(True)
         self.lblTitle.setText(dataset.getTitle())
         self.txtSummary.setPlainText(dataset.getSummary())
-        self.txtId.setPlainText(dataset.getId())
+        self.txtId.setText(dataset.getId())
         self.txtRights.setPlainText(dataset.getRights())                    
-        
+
         if dataset.getLinkMetadata():
             if len(dataset.getLinkMetadata()) > 0:
                 self.cmdMetadata.setEnabled(True)
@@ -297,7 +297,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self.currentmetadata = ""
 
         self.receive_dataset_representations(dataset.getLinkSubfeed())
-
 
     # request and handle "Dataset Feed" (dataset representations)
     def receive_dataset_representations(self, subfeedurl): 
@@ -334,7 +333,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                             if link.get("rel") == "section":
                                 files.append(self.buildurl(link.get("href")))
                         datasetrepresentation.setFiles(files)
-                        self.datasetrepresentations[QString(datasetrepresentation.getTitle())] = datasetrepresentation
+                        self.datasetrepresentations[(datasetrepresentation.getTitle())] = datasetrepresentation
                         self.cmbDatasetRepresentations.addItem(datasetrepresentation.getTitle(), datasetrepresentation.getTitle())
                         self.cmdDownload.setEnabled(True)
             
@@ -358,7 +357,8 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.lwFiles.clear()
         self.cmdDownload.setEnabled(False)
         self.cmdMetadata.setEnabled(False)
-#        self.frmDataset.setEnabled(False) # groupBox disable?
+        self.groupBoxDataset.setEnabled(False)
+        self.groupBoxSelectedDataset.setEnabled(False)
 
     def show_metadata(self):
         if len(self.currentmetadata) > 0:
@@ -610,11 +610,11 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
            # load xslt
            xslt_file = QFile(xslfilename)
            xslt_file.open(QIODevice.ReadOnly)
-           xslt = QString(xslt_file.readAll())
+           xslt = str(xslt_file.readAll())
            xslt_file.close()
  
            # load xml
-           xml_source = QString.fromUtf8(buf)
+           xml_source = str(buf)
 
            # xslt
            qry = QtXmlPatterns.QXmlQuery(QtXmlPatterns.QXmlQuery.XSLT20)
@@ -625,7 +625,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
            buf = QBuffer(array)
            buf.open(QIODevice.WriteOnly)
            qry.evaluateTo(buf)
-           xml_target = QString.fromUtf8(array)
+           xml_target = str(array)
            return xml_target
 
 
