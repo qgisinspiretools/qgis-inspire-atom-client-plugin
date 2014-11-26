@@ -46,6 +46,8 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.setupUi(self)
         self.parent = parent
         self.iface = self.parent.iface
+        self.root = QgsProject.instance().layerTreeRoot()
+
         
         self.settings = QSettings()
         self.init_variables()
@@ -81,6 +83,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     # request and handle "Service Feed" - Get Metadata | cmdGetFeed Signal
     def get_service_feed(self):
         self.init_variables()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             self.onlineresource = self.txtUrl.text().strip()
             request = unicode(self.onlineresource)
@@ -92,11 +95,13 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             buf = response.read()
             #QMessageBox.information(self, "Debug", buf)
         except urllib2.HTTPError, e:  
+            QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "HTTP Error", "HTTP Error: {0}".format(e.code))
             if e.code == 401:
                 self.chkAuthentication.setChecked(True)
                 self.update_authentication()
         except urllib2.URLError, e:
+            QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "URL Error", "URL Error: {0}".format(e.reason))
         else:
             layername="INSPIRE_DLS#{0}".format(''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6)))
@@ -107,6 +112,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 QMessageBox.critical(self, "QGIS-Layer Error", "Response is not a valid QGIS-Layer!")
             else: 
                 self.add_layer(vlayer)
+                self.iface.mapCanvas().setCurrentLayer(vlayer)
                 self.layername = vlayer.name()
                 self.iface.zoomToActiveLayer()
                 self.clear_frame()
@@ -118,6 +124,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 self.txtUrl.setEnabled(False)
                 self.txtUsername.setEnabled(False)
                 self.txtPassword.setEnabled(False)
+        QApplication.restoreOverrideCursor()   
 
     # update cmbDatasets
     def update_cmbDatasets(self):
@@ -230,17 +237,17 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             return 
         selectList = []
         provider = cLayer.dataProvider()
-        feat = QgsFeature()
-        # create the select statement
-        provider.select(provider.attributeIndexes(), rect)
-        while provider.nextFeature(feat):
-            # if the feat geom returned from the selection intersects our point then put it in a list
-            if feat.geometry().intersects(pntGeom):
-                selectList.append(feat.id())
-                map = feat.attributeMap() 
-                self.handle_dataset_selection(map, provider)
-                break 
-                    
+
+        request=QgsFeatureRequest()
+        request.setFilterRect(rect)
+        
+        iter = cLayer.getFeatures(request)
+        for feature in iter:
+            if feature.geometry().intersects(pntGeom):
+                selectList.append(feature.id())
+                self.handle_dataset_selection(feature, provider)
+                break
+
         # make the actual selection
         cLayer.setSelectedFeatures(selectList)
         result = QObject.disconnect(self.parent.clickTool, SIGNAL("canvasClicked(const QgsPoint &, Qt::MouseButton)"), self.select_dataset_feed_byclick_procedure)
@@ -356,7 +363,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.lwFiles.clear()
         self.cmdDownload.setEnabled(False)
         self.cmdMetadata.setEnabled(False)
-        self.groupBoxDataset.setEnabled(False)
+        #self.groupBoxDataset.setEnabled(False) # probably not yet 'perfect'...
         self.groupBoxSelectedDataset.setEnabled(False)
 
     def show_metadata(self):
@@ -490,8 +497,11 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
 
     def add_layer(self, layer):
-        QgsMapLayerRegistry.instance().addMapLayer(layer)
-
+        QgsMapLayerRegistry.instance().addMapLayer(layer, False)
+        layerNode = self.root.insertLayer(0, layer)
+        layerNode.setExpanded(False)    
+        layerNode.setVisible(Qt.Checked)
+        
     """
     ############################################################################################################################
     # UTIL
@@ -613,9 +623,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
            xslt_file.close()
  
            # load xml
-           #print buf
            xml_source = unicode(buf)
-           print xml_source
 
            # xslt
            qry = QtXmlPatterns.QXmlQuery(QtXmlPatterns.QXmlQuery.XSLT20)
@@ -627,7 +635,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
            buf.open(QIODevice.WriteOnly)
            qry.evaluateTo(buf)
            xml_target = str(array)
-           print xml_target
            return xml_target
 
 
@@ -643,7 +650,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             QFile.remove(fileName)
 
         self.outFile = QFile(fileName)
-        if not self.outFile.open(QtCore .QIODevice.WriteOnly):
+        if not self.outFile.open(QIODevice.WriteOnly):
             QMessageBox.critical(self, "Error", "Unable to save the file %s: %s." % (fileName, self.outFile.errorString()))
             self.outFile = None
             return
@@ -656,7 +663,8 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.httpRequestAborted = False
         # Download the file.
         self.progressBar.setVisible(True)
-        self.httpGetId = self.http.get(url, self.outFile)
+    
+        self.httpGetId = self.http.get(url.toString(), self.outFile)
 
 
     # currently unused
