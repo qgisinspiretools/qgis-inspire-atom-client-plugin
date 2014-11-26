@@ -249,7 +249,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
     # handle selection | selected by list or by click
     def handle_dataset_selection(self, feature, provider):
-        print "fubar"
         if not self.validate_feature(provider, feature):
             QMessageBox.critical(self, "INSPIRE Service Feed Entry Error", "Unable to process selected INSPIRE Service Feed Entry!")
             return
@@ -368,7 +367,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             if html:
                 # create and show the dialog
                 dlg = MetadataClientDialog()
-                dlg.wvMetadata.setHtml(html)
+                dlg.wvMetadata.setContent(str(html)) # setHtml does not work with "Umlaute". Some modifications were also needed when doing the urlib2 and xslt stuff.
                 dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
                 # show the dialog
                 dlg.show()
@@ -601,7 +600,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         try:
             self.setup_urllib2(url, "", "")
             response = urllib2.urlopen(url, None, 10)
-            buf = response.read()
+            buf = response.read().decode('utf-8') 
         except urllib2.HTTPError, e:  
             QMessageBox.critical(self, "HTTP Error", "HTTP Error: {0}".format(e.code))
         except urllib2.URLError, e:
@@ -614,7 +613,9 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
            xslt_file.close()
  
            # load xml
-           xml_source = str(buf)
+           #print buf
+           xml_source = unicode(buf)
+           print xml_source
 
            # xslt
            qry = QtXmlPatterns.QXmlQuery(QtXmlPatterns.QXmlQuery.XSLT20)
@@ -626,6 +627,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
            buf.open(QIODevice.WriteOnly)
            qry.evaluateTo(buf)
            xml_target = str(array)
+           print xml_target
            return xml_target
 
 

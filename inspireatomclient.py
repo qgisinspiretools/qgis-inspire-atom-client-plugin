@@ -79,7 +79,8 @@ class InspireAtomClient:
         # create and show the dialog
         dlg = InspireAtomClientDialog(self)
         # show the dialog
-        dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
+		# Dialog is placed in a corner?
+        #dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
         dlg.show()
         result = dlg.exec_()
         # See if OK was pressed
