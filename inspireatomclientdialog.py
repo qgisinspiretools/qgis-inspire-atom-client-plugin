@@ -52,17 +52,17 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.settings = QSettings()
         self.init_variables()
 
-        self.txtUsername.setVisible(False)
-        self.txtPassword.setVisible(False)
-        self.lblUsername.setVisible(False)
-        self.lblPassword.setVisible(False)
+        #self.txtUsername.setVisible(False)
+        #self.txtPassword.setVisible(False)
+        #self.lblUsername.setVisible(False)
+        #self.lblPassword.setVisible(False)
 
         # Connect signals
         QObject.connect(self.cmdGetFeed, SIGNAL("clicked()"), self.get_service_feed)
         QObject.connect(self.cmdSelectDataset, SIGNAL("clicked()"), self.select_dataset_feed_byclick)
         QObject.connect(self.cmdDownload, SIGNAL("clicked()"), self.download_files)
         QObject.connect(self.cmdMetadata, SIGNAL("clicked()"), self.show_metadata)
-        QObject.connect(self.chkAuthentication, SIGNAL("clicked()"), self.update_authentication)
+        #QObject.connect(self.chkAuthentication, SIGNAL("clicked()"), self.update_authentication)
         QObject.connect(self.cmbDatasets, SIGNAL("currentIndexChanged(int)"), self.select_dataset_feed_bylist)
         QObject.connect(self.cmbDatasetRepresentations, SIGNAL("currentIndexChanged(int)"), self.update_lw_files)
 
@@ -99,7 +99,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             QMessageBox.critical(self, "HTTP Error", "HTTP Error: {0}".format(e.code))
             if e.code == 401:
                 self.chkAuthentication.setChecked(True)
-                self.update_authentication()
+                #self.update_authentication()
         except urllib2.URLError, e:
             QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "URL Error", "URL Error: {0}".format(e.reason))
