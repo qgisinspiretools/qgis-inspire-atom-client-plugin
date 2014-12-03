@@ -47,10 +47,11 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.parent = parent
         self.iface = self.parent.iface
         self.root = QgsProject.instance().layerTreeRoot()
-
         
         self.settings = QSettings()
         self.init_variables()
+
+        self.txtPassword.setEchoMode(QLineEdit.Password)
 
         # Connect signals
         QObject.connect(self.cmdGetFeed, SIGNAL("clicked()"), self.get_service_feed)
