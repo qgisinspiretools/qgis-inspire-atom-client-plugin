@@ -13,21 +13,17 @@
   <property name="windowTitle">
    <string>INSPIRE Atom Client - Metadata Viewer</string>
   </property>
-  <widget class="QWebView" name="wvMetadata">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>10</y>
-     <width>1011</width>
-     <height>551</height>
-    </rect>
-   </property>
-   <property name="url">
-    <url>
-     <string>about:blank</string>
-    </url>
-   </property>
-  </widget>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0">
+    <widget class="QWebView" name="wvMetadata" native="true">
+     <property name="url" stdset="0">
+      <url>
+       <string>about:blank</string>
+      </url>
+     </property>
+    </widget>
+   </item>
+  </layout>
  </widget>
  <customwidgets>
   <customwidget>
