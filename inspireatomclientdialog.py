@@ -200,7 +200,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 except KeyError, e:
                     self.lblMessage.setText("") # TODO: exception handling
         # make the actual selection
-        cLayer.setSelectedFeatures(selectList)
+        cLayer.selectByIds(selectList)
 
 
     # select "Dataset Feed" | cmdSelectDataset Signal
