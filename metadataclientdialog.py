@@ -25,9 +25,9 @@ from PyQt5.QtWidgets import *
 
 import os.path
 
-FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), 'ui_metadataclient.ui'))
+from .ui_metadataclient import Ui_MetadataClient
 
-class MetadataClientDialog(QDialog, FORM_CLASS):
+class MetadataClientDialog(QDialog, Ui_MetadataClient):
 
     def __init__(self):
         super(MetadataClientDialog, self).__init__(None)

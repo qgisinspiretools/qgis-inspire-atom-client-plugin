@@ -1,1 +1,6 @@
 *.pyc
+.idea
+ui_*.py
+resources.py
+zip_build/
+
