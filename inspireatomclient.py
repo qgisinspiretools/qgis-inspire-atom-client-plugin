@@ -24,6 +24,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 from qgis.core import *
 from qgis.gui import *
+
 # Initialize Qt resources from file resources.py
 from .resources import *
 from .inspireatomclientdialog import InspireAtomClientDialog

@@ -23,13 +23,13 @@
 class Dataset(object):
 
     def __init__(self, id):
-        self.__id__ = id;
+        self.__id__ = id
         self.__title = ""
         self.__summary = ""
         self.__link_metadata = ""
         self.__link_subfeed = ""
         self.__rights = ""
- 
+
 
     def getId(self):
         return self.__id__
@@ -100,4 +100,3 @@ class DatasetRepresentation(object):
 
     def setFiles(self, files):
         self.__files = files
-
