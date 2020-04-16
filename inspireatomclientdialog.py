@@ -236,7 +236,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def select_dataset_feed_byclick_procedure(self, point, button):
         self.clear_frame()
         # setup the provider select to filter results based on a rectangle
-        pntGeom = QgsGeometry.fromPoint(point)
+        pntGeom = QgsGeometry.fromPointXY(point)
         # scale-dependent buffer of 2 pixels-worth of map units
         pntBuff = pntGeom.buffer((self.iface.mapCanvas().mapUnitsPerPixel() * 2), 0)
         rect = pntBuff.boundingBox()
@@ -263,7 +263,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 break
 
         # make the actual selection
-        cLayer.setSelectedFeatures(selectList)
+        cLayer.selectByIds(selectList)
         result = self.parent.clickTool.canvasClicked.disconnect(self.select_dataset_feed_byclick_procedure)
         self.iface.mapCanvas().unsetMapTool(self.parent.clickTool)
 
