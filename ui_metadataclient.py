@@ -7,7 +7,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt4 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -38,4 +38,5 @@ class Ui_MetadataClient(object):
     def retranslateUi(self, MetadataClient):
         MetadataClient.setWindowTitle(_translate("MetadataClient", "INSPIRE Atom Client - Metadata Viewer", None))
 
-from PyQt4 import QtWebKit
+
+from PyQt5 import QtWebKit

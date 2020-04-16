@@ -19,14 +19,14 @@
  ***************************************************************************/
 """
 # Import the PyQt and QGIS libraries
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
 from qgis.core import *
 from qgis.gui import *
 # Initialize Qt resources from file resources.py
-import resources
-# Import the code for the dialog
-from inspireatomclientdialog import InspireAtomClientDialog
+from .resources import *
+from .inspireatomclientdialog import InspireAtomClientDialog
 
 class InspireAtomClient:
 
@@ -40,11 +40,11 @@ class InspireAtomClient:
         self.action = QAction(QIcon(":/plugins/inspireatomclient/icon.png"), \
             "INSPIRE Atom Client", self.iface.mainWindow())
         # connect the action to the run method
-        QObject.connect(self.action, SIGNAL("triggered()"), self.run)
+        self.action.triggered.connect(self.run)
 
         self.aboutAction=QAction(QIcon(":/plugins/wfsclient/icon.png"), \
             "About", self.iface.mainWindow())
-        QObject.connect(self.aboutAction, SIGNAL("activated()"), self.about)
+        self.aboutAction.triggered.connect(self.about)
 
         # Add toolbar button and menu item
         if hasattr( self.iface, "addPluginToWebMenu" ):
