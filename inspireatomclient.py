@@ -75,13 +75,20 @@ class InspireAtomClient:
                      "<tr><td colspan=\"2\"><b>INSPIRE Atom Client 0.7.0</b></td></tr><tr>" \
                      "<td colspan=\"2\">Experimental Plugin</td></tr>" \
                      "<tr><td colspan=\"2\"></td></tr>" \
-                     "<tr><td>Author:</td><td>J&uuml;rgen Weichand</td></tr>" \
-                     "<tr><td>Mail:</td><td><a href=\"mailto:juergen@weichand.de\">juergen@weichand.de</a></td></tr>" \
+                     "<tr><td rowspan=\"2\">Authors:</td>" \
+                     "<td>J&uuml;rgen Weichand " \
+                     "(<a href=\"mailto:juergen@weichand.de\">juergen@weichand.de</a>)</td></tr>" \
+                     "<tr><td>Edward Nash " \
+                     "(<a href=\"mailto:e.nash@dvz-mv.de\">e.nash@dvz-mv.de</a>)</td></tr>" \
+                     "<tr><td colspan=\"2\"></td></tr>" \
                      "<tr><td>Website:</td>" \
-                     "<td><a href=\"http://www.weichand.de\">http://www.weichand.de</a></td></tr>" \
+                     "<td><a href=\"https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin\">" \
+                     "https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin</a></td></tr>" \
                      "<tr></tr>" \
                      "<tr><td colspan=\"2\"><b>QGIS 2.x Migration</b></td></tr></tr>" \
                      "<tr><td>Author:</td><td>Stefan Ziegler</td></tr>" \
+                     "<tr><td colspan=\"2\"><b>QGIS 3.x Migration</b></td></tr></tr>" \
+                     "<tr><td>Author:</td><td>Tim Vinzing</td></tr>" \
                      "</table>"
         QMessageBox.information(self.iface.mainWindow(), "About INSPIRE Atom Client", infoString)
 
