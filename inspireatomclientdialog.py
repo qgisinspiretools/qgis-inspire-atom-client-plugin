@@ -367,7 +367,16 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         buf = self.reply.readAll().data()
 
         self.datasetrepresentations = {}
-        root = ElementTree.fromstring(buf)
+        try:
+            root = ElementTree.fromstring(buf)
+        except ElementTree.ParseError as err:
+            QMessageBox.critical(
+                self,
+                "XML Parsing error",
+                "The dataset feed could not be read:\n{0}".format(err.msg)
+            )
+            return
+
         # ATOM Namespace
         namespace = "{http://www.w3.org/2005/Atom}"
         # check correct Rootelement
