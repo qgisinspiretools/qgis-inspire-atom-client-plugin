@@ -101,10 +101,12 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
     def startAtomFeedMetadataRequest(self, url):
         self.reply = self.qnam.get(QNetworkRequest(url))
+        self.log_message("Fetching atom feed " + url.toDisplayString())
         self.reply.finished.connect(self.atomFeedMetadataFinished)
         self.reply.error.connect(self.errorOcurred)
 
     def atomFeedMetadataFinished(self):
+        self.log_message('Atom feed request finished')
         if self.checkForHTTPErrors():
             return
 
@@ -354,12 +356,14 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def receive_dataset_representations(self, subfeedurl):
         self.url = QUrl(subfeedurl)
         self.reply = self.qnam.get(QNetworkRequest(self.url))
+        self.log_message("Fetching dataset feed " + self.url.toDisplayString())
         self.reply.finished.connect(self.datasetRepReceived)
         self.reply.error.connect(self.errorOcurred)
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self.httpGetId = 0
 
     def datasetRepReceived(self):
+        self.log_message ("Dataset feed request finished")
         QApplication.restoreOverrideCursor()
         if self.checkForHTTPErrors():
             return
@@ -428,10 +432,12 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def show_metadata(self):
         if len(self.currentmetadata) > 0:
             self.reply = self.qnam.get(QNetworkRequest(QUrl(self.currentmetadata)))
+            self.log_message("Fetching metadata " + self.currentmetadata)
             self.reply.finished.connect(self.metadata_request_finished)
             self.reply.error.connect(self.errorOcurred)
 
     def metadata_request_finished(self):
+        self.log_message ("Metadata request finished")
         if self.checkForHTTPErrors():
             return
 
@@ -745,6 +751,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
     def startRequest(self, url):
         self.reply = self.qnam.get(QNetworkRequest(url))
+        self.log_message('Downloading {0}'.format(url.toDisplayString()))
         self.reply.finished.connect(self.httpRequestFinished)
         self.reply.readyRead.connect(self.httpReadyRead)
         self.reply.error.connect(self.errorOcurred)
@@ -765,6 +772,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.reset_ui_download()
 
     def httpRequestFinished(self):
+        self.log_message('Download finished')
         if self.checkForHTTPErrors():
             self.httpRequestAborted = True
 
