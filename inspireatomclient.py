@@ -19,14 +19,15 @@
  ***************************************************************************/
 """
 # Import the PyQt and QGIS libraries
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
 from qgis.core import *
 from qgis.gui import *
+
 # Initialize Qt resources from file resources.py
-import resources
-# Import the code for the dialog
-from inspireatomclientdialog import InspireAtomClientDialog
+from .resources import *
+from .inspireatomclientdialog import InspireAtomClientDialog
 
 class InspireAtomClient:
 
@@ -40,11 +41,11 @@ class InspireAtomClient:
         self.action = QAction(QIcon(":/plugins/inspireatomclient/icon.png"), \
             "INSPIRE Atom Client", self.iface.mainWindow())
         # connect the action to the run method
-        QObject.connect(self.action, SIGNAL("triggered()"), self.run)
+        self.action.triggered.connect(self.run)
 
         self.aboutAction=QAction(QIcon(":/plugins/wfsclient/icon.png"), \
             "About", self.iface.mainWindow())
-        QObject.connect(self.aboutAction, SIGNAL("activated()"), self.about)
+        self.aboutAction.triggered.connect(self.about)
 
         # Add toolbar button and menu item
         if hasattr( self.iface, "addPluginToWebMenu" ):
@@ -70,7 +71,25 @@ class InspireAtomClient:
 
 
     def about(self):
-        infoString = "<table><tr><td colspan=\"2\"><b>INSPIRE Atom Client 0.7.0</b></td></tr><tr><td colspan=\"2\">Experimental Plugin</td></tr><tr><td colspan=\"2\"></td></tr><tr><td>Author:</td><td>J&uuml;rgen Weichand</td></tr><tr><td>Mail:</td><td><a href=\"mailto:juergen@weichand.de\">juergen@weichand.de</a></td></tr><tr><td>Website:</td><td><a href=\"http://www.weichand.de\">http://www.weichand.de</a></td></tr><tr></tr><tr><td colspan=\"2\"><b>QGIS 2.x Migration</b></td></tr></tr><tr><td>Author:</td><td>Stefan Ziegler</td></tr></table>"
+        infoString = "<table>" \
+                     "<tr><td colspan=\"2\"><b>INSPIRE Atom Client 0.8.0</b></td></tr><tr>" \
+                     "<td colspan=\"2\">Experimental Plugin</td></tr>" \
+                     "<tr><td colspan=\"2\"></td></tr>" \
+                     "<tr><td rowspan=\"2\">Authors:</td>" \
+                     "<td>J&uuml;rgen Weichand " \
+                     "(<a href=\"mailto:juergen@weichand.de\">juergen@weichand.de</a>)</td></tr>" \
+                     "<tr><td>Edward Nash " \
+                     "(<a href=\"mailto:e.nash@dvz-mv.de\">e.nash@dvz-mv.de</a>)</td></tr>" \
+                     "<tr><td colspan=\"2\"></td></tr>" \
+                     "<tr><td>Website:</td>" \
+                     "<td><a href=\"https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin\">" \
+                     "https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin</a></td></tr>" \
+                     "<tr></tr>" \
+                     "<tr><td colspan=\"2\"><b>QGIS 2.x Migration</b></td></tr></tr>" \
+                     "<tr><td>Author:</td><td>Stefan Ziegler</td></tr>" \
+                     "<tr><td colspan=\"2\"><b>QGIS 3.x Migration</b></td></tr></tr>" \
+                     "<tr><td>Author:</td><td>Tim Vinzing</td></tr>" \
+                     "</table>"
         QMessageBox.information(self.iface.mainWindow(), "About INSPIRE Atom Client", infoString)
 
     # run method that performs all the real work

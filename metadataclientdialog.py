@@ -20,18 +20,14 @@
  ***************************************************************************/
 """
 
-from PyQt4 import uic
-from PyQt4.QtCore import *
-from PyQt4.QtGui import *
-from ui_metadataclient import Ui_MetadataClient
-from qgis.core import *
+from PyQt5 import uic
+from PyQt5.QtWidgets import *
 
-import os
 import os.path
 
-FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), 'ui_metadataclient.ui'))
+from .ui_metadataclient import Ui_MetadataClient
 
-class MetadataClientDialog(QDialog, FORM_CLASS):
+class MetadataClientDialog(QDialog, Ui_MetadataClient):
 
     def __init__(self):
         super(MetadataClientDialog, self).__init__(None)
