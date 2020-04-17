@@ -9,7 +9,7 @@
 name=INSPIRE Atom Client
 description=Client for INSPIRE Downloadservices based on ATOM-Feeds
 category=Web
-version=0.7.0
+version=0.8.0
 qgisMinimumVersion=3.0
 class_name=InspireAtomClient
 website=https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin
