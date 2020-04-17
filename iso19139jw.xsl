@@ -7,7 +7,7 @@
  ISO 19139 Metadata to HTML XSL-Transformation
                              - - - - - - - - 
         begin                : 2012-08-14
-        update               : 2012-10-27
+        update               : 2020-04-14
         copyright            : (c) 2012 by Juergen Weichand
         email                : juergen@weichand.de
         web                  : weichand.de
@@ -23,40 +23,43 @@
  ***************************************************************************/
 """
 -->
-<xsl:stylesheet 
-    version="1.0" 
-    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"    
+<xsl:stylesheet
+    version="2.0"
+    xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
     xmlns:xlink="http://www.w3.org/1999/xlink"
     xmlns:csw="http://www.opengis.net/cat/csw/2.0.2"
-    xmlns:gmd="http://www.isotc211.org/2005/gmd"    
+    xmlns:gmd="http://www.isotc211.org/2005/gmd"
     xmlns:gco="http://www.isotc211.org/2005/gco"
     xmlns:srv="http://www.isotc211.org/2005/srv"
     xmlns:wei="http://www.weichand.de"
-    exclude-result-prefixes="gmd gco csw srv">
-        
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    exclude-result-prefixes="gmd gco csw srv xs">
+
     <xsl:output method="html" encoding="UTF-8"/>
-    
+
     <xsl:template name="tableRow" >
         <xsl:param name="key"/>
-        <xsl:param name="value"/>
-        <xsl:choose>
-            <xsl:when test="string($value)">
-                <tr>
-                    <td>
-                        <xsl:attribute name="width">
-                            <xsl:value-of select="'20%'"/>                            
-                        </xsl:attribute>                        
-                        <xsl:value-of select="$key"/>
-                    </td>
-                    <td>
-                        <xsl:value-of select="$value"/>
-                    </td>
-                </tr>
-            </xsl:when>
-            <xsl:otherwise></xsl:otherwise>
-        </xsl:choose>
+        <xsl:param name="value" as="xs:string*"></xsl:param>
+        <xsl:for-each select="$value">
+			<xsl:choose>
+				<xsl:when test="string(.)">
+					<tr>
+						<td>
+							<xsl:attribute name="width">
+								<xsl:value-of select="'20%'"/>
+                            </xsl:attribute>
+							<xsl:value-of select="$key"/>
+						</td>
+						<td>
+							<xsl:value-of select="."/>
+						</td>
+					</tr>
+				</xsl:when>
+				<xsl:otherwise></xsl:otherwise>
+			</xsl:choose>
+        </xsl:for-each>
     </xsl:template>
-    
+
     <xsl:template name="tableRowLink" >
         <xsl:param name="key"/>
         <xsl:param name="url"/>
@@ -67,72 +70,72 @@
                 <tr>
                     <td>
                         <xsl:attribute name="width">
-                            <xsl:value-of select="'20%'"/>                            
-                        </xsl:attribute>   
-                        <xsl:value-of select="$key"/>                            
+                            <xsl:value-of select="'20%'"/>
+                        </xsl:attribute>
+                        <xsl:value-of select="$key"/>
                     </td>
                     <td>
                         <a>
                             <xsl:attribute name="href">
-                                <xsl:value-of select="$url"/>                            
-                            </xsl:attribute>          
+                                <xsl:value-of select="$url"/>
+                            </xsl:attribute>
                             <!--
                             <xsl:attribute name="target">
-                                <xsl:value-of select="'_blank'"/>                            
-                            </xsl:attribute>                                   
+                                <xsl:value-of select="'_blank'"/>
+                            </xsl:attribute>
                             -->
                             <xsl:choose>
-                                <xsl:when test="string($description)">                                   
+                                <xsl:when test="string($description)">
                                     <xsl:attribute name="title">
-                                        <xsl:value-of select="$description"/>                            
-                                    </xsl:attribute>                                   
+                                        <xsl:value-of select="$description"/>
+                                    </xsl:attribute>
                                 </xsl:when>
-                                <xsl:otherwise></xsl:otherwise>                                
-                            </xsl:choose>                            
+                                <xsl:otherwise></xsl:otherwise>
+                            </xsl:choose>
                             <xsl:choose>
                                 <xsl:when test="string($name)">
-                                    <xsl:value-of select="$name"/>                            
+                                    <xsl:value-of select="$name"/>
                                 </xsl:when>
                                 <xsl:otherwise>
-                                    <xsl:value-of select="$url"/>                                                
-                                </xsl:otherwise>                                
+                                    <xsl:value-of select="$url"/>
+                                </xsl:otherwise>
                             </xsl:choose>
-                        </a>    
-                    </td>                        
+                        </a>
+                    </td>
                 </tr>
-            </xsl:when>                
+            </xsl:when>
         </xsl:choose>
-    </xsl:template>      
+    </xsl:template>
 
 
-    
-    
+
+
     <xsl:template match="/">
         <html xmlns="http://www.w3.org/1999/xhtml">
             <head>
-                <meta http-equiv="content-type" content="text/html; charset=utf-8" /> 
+                <meta http-equiv="content-type" content="text/html; charset=utf-8" />
                 <style type="text/css">
                     body {
                     color: #8B0000;
                     background: #E6E6E6;
-                    font-family: Arial,Helvetica,sans-serif;	
+                    font-family: Arial,Helvetica,sans-serif;
                     font-size: 1.2em;
-                    text-align: center;    
+                    text-align: center;
                     }
 
                     .top {
                     color: #000000;
                     font-size: 1.6em;
                     font-weight: bold;
-                    text-align: center;    
+                    text-align: center;
                     }
 
                     .copyright {
                     color: #000000;
                     font-size: 0.6em;
-                    text-align: center;    
+                    text-align: center;
                     }
-                      
+
                     table {
                     text-align: center;
                     width: 852px;
@@ -166,20 +169,20 @@
 
                 </style>
             </head>
-            
-            <body>        
+
+            <body>
                 <xsl:apply-templates select="//gmd:MD_Metadata" />
                 <p class="copyright">
                     Metadata Viewer - <a href="http://www.weichand.de/">http://www.weichand.de</a> - (c) Juergen Weichand<br />
-                    Version: 2012-10-27
-                </p>                                    
+                    Version: 2020-04-14
+                </p>
             </body>
         </html>
     </xsl:template>
-    
-   
+
+
     <xsl:template match="gmd:MD_Metadata">
-        <table style="background: #F2F2F2"> 
+        <table style="background: #F2F2F2">
             <caption>Identification Info</caption>
             <tr>
                 <td>
@@ -187,11 +190,11 @@
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Title'"/>
                             <xsl:with-param name="value" select="gmd:identificationInfo[1]/*/gmd:citation/*/gmd:title/gco:CharacterString"/>
-                        </xsl:call-template>             
+                        </xsl:call-template>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Alternate Title'"/>
                             <xsl:with-param name="value" select="gmd:identificationInfo[1]/*/gmd:citation/*/gmd:alternateTitle/gco:CharacterString"/>
-                        </xsl:call-template>                                     
+                        </xsl:call-template>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Abstract'"/>
                             <xsl:with-param name="value" select="gmd:identificationInfo[1]/*/gmd:abstract/gco:CharacterString"/>
@@ -203,73 +206,73 @@
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Identifier'"/>
                             <xsl:with-param name="value" select="gmd:identificationInfo[1]/*/gmd:citation/*/gmd:identifier/*/gmd:code/gco:CharacterString"/>
-                        </xsl:call-template>    
+                        </xsl:call-template>
                         <tr>
                             <td>Date(s)</td>
                             <td>
                                 <xsl:apply-templates select="gmd:identificationInfo[1]/*/gmd:citation/*/gmd:date" />
                             </td>
-                        </tr>                            
+                        </tr>
                         <tr>
                             <td>Keyword(s)</td>
                             <td>
                                 <xsl:apply-templates select="gmd:identificationInfo[1]/*/gmd:descriptiveKeywords" />
                             </td>
-                        </tr>                              
-                    </table>                                                          
+                        </tr>
+                    </table>
                     <xsl:apply-templates select="gmd:identificationInfo[1]/*/*/gmd:EX_Extent" />
-                    
+
                     <!-- Service -->
                     <table>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Service Type'"/>
                             <xsl:with-param name="value" select="gmd:identificationInfo[1]/*/srv:serviceType/*"/>
-                        </xsl:call-template>                                     
+                        </xsl:call-template>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Service Type Version'"/>
                             <xsl:with-param name="value" select="gmd:identificationInfo[1]/*/srv:serviceTypeVersion/gco:CharacterString"/>
-                        </xsl:call-template>                           
+                        </xsl:call-template>
                         <xsl:apply-templates select="gmd:identificationInfo[1]/srv:SV_ServiceIdentification" />
                     </table>
-                    
+
                     <xsl:apply-templates select="gmd:identificationInfo[1]/*/gmd:pointOfContact/gmd:CI_ResponsibleParty" />
                 </td>
             </tr>
         </table>
-        
-        <table style="background: #F2F2F2"> 
+
+        <table style="background: #F2F2F2">
             <caption>Distribution Info</caption>
             <tr>
                 <td>
                     <table>
                         <xsl:apply-templates select="gmd:distributionInfo[1]/*/gmd:transferOptions/gmd:MD_DigitalTransferOptions/gmd:onLine" />
                     </table>
-                    <xsl:apply-templates select="gmd:distributionInfo[1]/*/gmd:distributor/gmd:MD_Distributor/gmd:distributorContact/gmd:CI_ResponsibleParty" />                                        
-                </td>                
-            </tr>        
-        </table>  
-        
-        
-        <table style="background: #F2F2F2"> 
+                    <xsl:apply-templates select="gmd:distributionInfo[1]/*/gmd:distributor/gmd:MD_Distributor/gmd:distributorContact/gmd:CI_ResponsibleParty" />
+                </td>
+            </tr>
+        </table>
+
+
+        <table style="background: #F2F2F2">
             <caption>Metadata</caption>
             <tr>
                 <td>
-                    <table>           
+                    <table>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'File Identifier'"/>
                             <xsl:with-param name="value" select="gmd:fileIdentifier/gco:CharacterString"/>
-                        </xsl:call-template>                          
+                        </xsl:call-template>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Language'"/>
-                            <xsl:with-param name="value" select="gmd:language/*"/>
-                        </xsl:call-template>                         
+                            <xsl:with-param name="value" select="gmd:language//@codeListValue"/>
+                        </xsl:call-template>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Character Set'"/>
-                            <xsl:with-param name="value" select="gmd:characterSet/*"/>
-                        </xsl:call-template>                      
+                            <xsl:with-param name="value" select="gmd:characterSet//@codeListValue"/>
+                        </xsl:call-template>
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Hierarchy Level'"/>
-                            <xsl:with-param name="value" select="gmd:hierarchyLevel/*"/>
+                            <xsl:with-param name="value" select="gmd:hierarchyLevel//@codeListValue"/>
                         </xsl:call-template>  
                         <xsl:call-template name="tableRow">
                             <xsl:with-param name="key" select="'Hierarchy Level Name'"/>

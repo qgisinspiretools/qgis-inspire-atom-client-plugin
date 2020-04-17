@@ -51,6 +51,8 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.root = QgsProject.instance().layerTreeRoot()
 
         self.qnam = QNetworkAccessManager()
+        self.qnam.authenticationRequired.connect(self.authenticationRequired)
+        self.qnam.sslErrors.connect(self.sslErrors)
         self.settings = QSettings()
         self.init_variables()
 
@@ -91,8 +93,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.onlineresource = self.txtUrl.text().strip()
         request = str(self.onlineresource)
 
-        self.qnam.authenticationRequired.connect(self.authenticationRequired)
-        self.qnam.sslErrors.connect(self.sslErrors)
         self.reply = None
         self.httpGetId = 0
         self.url = QUrl(request)
@@ -126,21 +126,55 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
             # Lock
             self.cmdGetFeed.setEnabled(False)
-            self.chkAuthentication.setEnabled(False)
             self.txtUrl.setEnabled(False)
-            self.txtUsername.setEnabled(False)
-            self.txtPassword.setEnabled(False)
 
         QApplication.restoreOverrideCursor()
 
     def checkForHTTPErrors(self):
-        if self.reply.error():
-            QMessageBox.information(self, "HTTP",
-                                    "Download failed: %s." % self.reply.errorString())
+        http_code = self.reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        if http_code is not None:
+            self.log_message('Request finished with HTTP code {0}'.format(http_code))
+        else:
+            self.log_message('Request finished with no HTTP code (aborted?)')
+
+        if http_code == 401:
+            QMessageBox.critical(
+                self,
+                "HTTP 401 Unauthorized",
+                "Authentication is required for this request"
+            )
             return True
 
-    def errorOcurred(self):
-        print("Error Ocurred!")
+        if http_code == 403:
+            QMessageBox.critical(
+                self,
+                "HTTP 403 Forbidden",
+                "Your authentication is insufficient for this request"
+            )
+            return True
+
+        if http_code == 404:
+            QMessageBox.critical(
+                self,
+                "HTTP 404 Not Found",
+                "The specified resource was not found - is the URL correct?"
+            )
+            return True
+
+        error = self.reply.error()
+        if error != QNetworkReply.NoError:
+            if not self.httpRequestAborted:
+                QMessageBox.critical(self, "HTTP Error",
+                                     "Request failed: %s." % self.reply.errorString())
+            return True
+
+        return False
+
+    def errorOcurred(self, error_code):
+        if self.reply is None:
+            self.log_message('HTTP error occurred: {0}'.format(error_code), Qgis.Warning)
+        else:
+            self.log_message('HTTP error occurred: {0}'.format(self.reply.errorString(), Qgis.Warning))
 
     def update_cmbDatasets(self):
         self.is_cmbDatasets_locked = True
@@ -321,9 +355,14 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.url = QUrl(subfeedurl)
         self.reply = self.qnam.get(QNetworkRequest(self.url))
         self.reply.finished.connect(self.datasetRepReceived)
+        self.reply.error.connect(self.errorOcurred)
+        QApplication.setOverrideCursor(Qt.WaitCursor)
         self.httpGetId = 0
 
     def datasetRepReceived(self):
+        QApplication.restoreOverrideCursor()
+        if self.checkForHTTPErrors():
+            return
 
         buf = self.reply.readAll().data()
 
@@ -379,26 +418,56 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
     def show_metadata(self):
         if len(self.currentmetadata) > 0:
-            xslfilename = os.path.join(plugin_path, "iso19139jw.xsl")
-            html = self.xsl_transform(self.currentmetadata, xslfilename)
-            html_qba = QByteArray(bytearray(html, encoding='utf-8'))
+            self.reply = self.qnam.get(QNetworkRequest(QUrl(self.currentmetadata)))
+            self.reply.finished.connect(self.metadata_request_finished)
+            self.reply.error.connect(self.errorOcurred)
 
-            if html:
-                # create and show the dialog
-                dlg = MetadataClientDialog()
-                dlg.wvMetadata.setContent(
-                    html_qba)  # setHtml does not work with "Umlaute". Some modifications were also needed when doing the urlib2 and xslt stuff.
-                dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
-                # show the dialog
-                dlg.show()
-                result = dlg.exec_()
-                # See if OK was pressed
-                if result == 1:
-                    # do something useful (delete the line containing pass and
-                    # substitute with your code
-                    pass
-            else:
-                QMessageBox.critical(self, "Metadata Error", "Unable to read the Metadata")
+    def metadata_request_finished(self):
+        if self.checkForHTTPErrors():
+            return
+
+        response = self.reply
+        xslfilename = os.path.join(plugin_path, "iso19139jw.xsl")
+
+        response_content = response.readAll()
+        encoding = 'utf_8'
+        for header in response.rawHeaderPairs():
+            if header[0].toLower() == 'content-type':
+                charset_index = header[1].indexOf('charset=')
+                if charset_index > -1:
+                    encoding = str(header[1][charset_index + 8:], 'ascii')
+                    self.log_message('Got encoding from Content-Type header: {0}'.format(encoding))
+
+        encoding = encoding.lower().translate(encoding.maketrans('-', '_'))
+        self.log_message('Using encoding {0} for metadata'.format(encoding))
+
+        try:
+            xml_source = str(response_content, encoding)
+        except LookupError:
+            self.log_message('Could not use encoding {0}, trying again with utf_8'.format(encoding), Qgis.Warning)
+            xml_source = str(response_content, 'utf_8')
+
+        qry = QtXmlPatterns.QXmlQuery(QtXmlPatterns.QXmlQuery.XSLT20)
+        qry.setMessageHandler(MessageHandler())
+        qry.setFocus(xml_source)
+        qry.setQuery(QUrl('file:///' + xslfilename))
+
+        html = qry.evaluateToString()
+
+        if html:
+            # create and show the dialog
+            dlg = MetadataClientDialog()
+            dlg.wvMetadata.setHtml(html)
+            # show the dialog
+            dlg.show()
+            result = dlg.exec_()
+            # See if OK was pressed
+            if result == 1:
+                # do something useful (delete the line containing pass and
+                # substitute with your code
+                pass
+        else:
+            QMessageBox.critical(self, "Metadata Error", "Unable to read the Metadata")
 
     """
     ############################################################################################################################
@@ -413,9 +482,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.httpGetId = 0
         self.httpRequestAborted = False
         self.downloadedfiles = []
-        if self.chkAuthentication.isChecked():
-            self.qnam.authenticationRequired.connect(self.authenticationRequired)
-
         self.download_next()
 
     # download next file (after finishing the last one)
@@ -503,6 +569,77 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     ############################################################################################################################
     """
 
+    # QHttp Slot
+    def authenticationRequired(self, reply, authenticator):
+        use_authentication = self.chkAuthentication.isChecked()
+        username = self.txtUsername.text().strip()
+        password = self.txtPassword.text().strip()
+        previousUsername = authenticator.user()
+        previousPassword = authenticator.password()
+
+        terminate_request = False
+
+        if not(use_authentication):
+            QMessageBox.critical(
+                self,
+                "Authentication required",
+                "Authentication is required for this request"
+            )
+            self.chkAuthentication.setChecked(True)
+            self.txtUsername.setFocus()
+            terminate_request = True
+
+        if username == '' and not terminate_request:
+            QMessageBox.critical(
+                self,
+                "Authentication required",
+                "Please enter your username for this request"
+            )
+            self.txtUsername.setFocus()
+            terminate_request = True
+
+        if username == previousUsername and password == previousPassword and not terminate_request:
+            QMessageBox.critical(
+                self,
+                "Authentication failed",
+                "Authentication with username/password failed - please check and try again"
+            )
+            self.txtUsername.setFocus()
+            terminate_request = True
+
+        if terminate_request:
+            self.httpRequestAborted = True
+            reply.abort()
+            return
+
+        authenticator.setUser(username)
+        authenticator.setPassword(password)
+        self.log_message("Using username {0} / password ***".format(username))
+
+    def sslErrors(self, reply, errors):
+        errorString = ""
+        for error in errors:
+            errorString += " * " + error.errorString() + "\n"
+
+        ret = QtWidgets.QMessageBox.question(
+            self,
+            "Certificate validation error",
+            "The following SSL validation errors have been reported:\n\n%s\n" \
+            "This may indicate a problem with the server and/or its certificate.\n\n" \
+            "Do you wish to continue anyway?" % errorString,
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+        )
+
+        if ret == QtWidgets.QMessageBox.Yes:
+            self.log_message("Ignoring SSL errors", Qgis.Warning)
+            reply.ignoreSslErrors()
+        else:
+            self.httpRequestAborted = True
+
+    def log_message(self, message, level=Qgis.Info):
+        if 'QgsMessageLog' in globals():
+            QgsMessageLog.logMessage(message, "INSPIRE Atom Client", level)
+
     def get_temppath(self, filename):
         tmpdir = os.path.join(tempfile.gettempdir(), 'inspireatomclient')
         if not os.path.exists(tmpdir):
@@ -532,32 +669,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 return "http://" + proxy
         else:
             return ""
-
-
-    # Setup urllib2 (Proxy)
-    def setup_urllib2(self, request, username, password):
-        # with Authentication
-        if username and len(username) > 0:
-            if password and len(password) > 0:
-                password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-                password_mgr.add_password(None, request, username, password)
-                auth_handler = urllib2.HTTPBasicAuthHandler(password_mgr)
-
-                if not self.getProxy() == "":
-                    proxy_handler = urllib2.ProxyHandler({"http": self.getProxy()})
-                else:
-                    proxy_handler = urllib2.ProxyHandler({})
-                opener = urllib2.build_opener(proxy_handler, auth_handler)
-                urllib2.install_opener(opener)
-
-        # without Authentication
-        else:
-            if not self.getProxy() == "":
-                proxy_handler = urllib2.ProxyHandler({"http": self.getProxy()})
-            else:
-                proxy_handler = urllib2.ProxyHandler({})
-            opener = urllib2.build_opener(proxy_handler)
-            urllib2.install_opener(opener)
 
     # Convert relative links to absolute link
     def buildurl(self, urlfragment):
@@ -592,43 +703,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6)), extension)
         return filename
 
-    # XSL Transformation
-    def xsl_transform(self, url, xslfilename):
-        # TODO: urllib gegen QNAM austauschen
-        try:
-            self.setup_urllib2(url, "", "")
-            response = urllib2.urlopen(url, None, 10)
-            buf = response.read().decode('utf-8')
-        except urllib2.HTTPError as e:
-            QMessageBox.critical(self, "HTTP Error", "HTTP Error: {0}".format(e.code))
-        except urllib2.URLError as e:
-            QMessageBox.critical(self, "URL Error", "URL Error: {0}".format(e.reason))
-        else:
-            # load xslt
-            xslt_file = QFile(xslfilename)
-            xslt_file.open(QIODevice.ReadOnly)
-            xslt = str(xslt_file.readAll())
-            xslt_file.close()
-            xslt = xslt.replace("\\t", "\t")
-            xslt = xslt.replace("\\n", "\n")
-            xslt = xslt[2:len(xslt) - 1]
-
-            # load xml
-            xml_source = str(buf)
-
-            # xslt
-            qry = QtXmlPatterns.QXmlQuery(QtXmlPatterns.QXmlQuery.XSLT20)
-            qry.setFocus(xml_source)
-            qry.setQuery(xslt)
-
-            array = QByteArray()
-            buf = QBuffer(array)
-            buf.open(QIODevice.WriteOnly)
-            qry.evaluateTo(buf)
-            xml_target = str(array)
-
-            return xml_target
-
     #############################################################################################################
     # QHttp GetFeature-Request - http://stackoverflow.com/questions/6852038/threading-in-pyqt4
     #############################################################################################################
@@ -656,6 +730,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.reply = self.qnam.get(QNetworkRequest(url))
         self.reply.finished.connect(self.httpRequestFinished)
         self.reply.readyRead.connect(self.httpReadyRead)
+        self.reply.error.connect(self.errorOcurred)
         self.reply.downloadProgress.connect(self.updateDataReadProgress)
 
     def httpReadyRead(self):
@@ -673,6 +748,9 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.unlock_ui()
 
     def httpRequestFinished(self):
+        if self.checkForHTTPErrors():
+            self.httpRequestAborted = True
+
         if self.httpRequestAborted:
             if self.outFile is not None:
                 self.outFile.close()
@@ -712,15 +790,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.lblMessage.setText("Please wait while downloading - {0} Bytes downloaded!".format(str(bytesRead)))
 
 
-    def authenticationRequired(self, reply, authenticator):
-        self.qnam.authenticationRequired.disconnect(self.authenticationRequired)
-        authenticator.setUser(self.txtUsername.text().strip())
-        authenticator.setPassword(self.txtPassword.text().strip())
-
-    def sslErrors(self, errors):
-        errorString = ""
-        for error in errors:
-            errorString+=error.errorString() + "\n"
-        # QtWidgets.QMessageBox.critical(self, "Error", errorString)
-
-        self.qnam.ignoreSslErrors()
+class MessageHandler(QtXmlPatterns.QAbstractMessageHandler):
+    def handleMessage(self, msg_type, description, identifier, source_location):
+        if 'QgsMessageLog' in globals():
+            QgsMessageLog.logMessage(str(msg_type) + description, "Wfs20Client", Qgis.Info)
