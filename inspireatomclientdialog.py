@@ -486,6 +486,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
     # execute download procedure | cmdDownload Signal
     def download_files(self):
+        self.reset_ui_download()
         self.lblMessage.setText("")
 
         self.httpGetId = 0
@@ -495,8 +496,18 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
     # download next file (after finishing the last one)
     def download_next(self):
+        self.currentdownload += 1
         datasetrepresentation = self.datasetrepresentations[self.cmbDatasetRepresentations.currentText()]
+        num_selected = len(self.lwFiles.selectedItems())
+        if num_selected > 0:
+            num_downloads = num_selected
+        else:
+            num_downloads = len(datasetrepresentation.getFiles())
         if self.currentfile < len(datasetrepresentation.getFiles()):
+            if num_selected > 0 and not self.lwFiles.item(self.currentfile).isSelected():
+                self.currentfile += 1
+                self.download_next()
+                return
             self.cmdGetFeed.setEnabled(False)
             self.cmdDownload.setEnabled(False)
             self.cmdSelectDataset.setEnabled(False)
@@ -504,12 +515,8 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self.cmbDatasets.setEnabled(False)
             self.cmbDatasetRepresentations.setEnabled(False)
 
-            # TODO: Selection Fixen
-            # self.lwFiles.setItemSelected(self.lwFiles.item(self.currentfile), True)
-            self.lwFiles.item(self.currentfile).setSelected(True)
-
             self.cmdDownload.setText(
-                "Downloading {0}/{1}".format(self.currentfile + 1, len(datasetrepresentation.getFiles())))
+                "Downloading {0}/{1}".format(self.currentdownload, num_downloads))
             file = datasetrepresentation.getFiles()[self.currentfile]
             filename = self.buildfilename(file)
             self.downloadFile(file, self.get_temppath(filename))
@@ -562,6 +569,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.cmbDatasets.setEnabled(True)
         self.cmbDatasetRepresentations.setEnabled(True)
         self.currentfile = 0
+        self.currentdownload = 0
         if len(self.currentmetadata) > 0:
             self.cmdMetadata.setEnabled(True)
 
@@ -754,7 +762,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
         self.progressBar.setMaximum(1)
         self.progressBar.setValue(0)
-        self.unlock_ui()
+        self.reset_ui_download()
 
     def httpRequestFinished(self):
         if self.checkForHTTPErrors():
@@ -767,7 +775,8 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 self.outFile = None
             self.reply.deleteLater()
             self.reply = None
-            self.ui.progressBar.hide()
+            self.progressBar.hide()
+            self.reset_ui_download()
             return
 
         self.outFile.flush()
