@@ -709,7 +709,9 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         else:
             # TODO: use Mime-Type
             extension = "ext"
-            if url.lower().find("tif") > -1:
+            if url.lower().find("zip") > -1:
+                extension = "zip"
+            elif url.lower().find("tif") > -1:
                 extension = "tiff"
             elif url.lower().find("gml") > -1:
                 extension = "gml"
