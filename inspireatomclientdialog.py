@@ -577,17 +577,31 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 successful.append(downloaded_file)
 
         message = ""
-        if len(successful) > 0:
-            message += "<p><b>Successfully loaded:</b><br />"
+        msgbox_function = QMessageBox.information
+        n_successful = len(successful)
+        if n_successful > 0:
+            message += "<p><b>Successfully loaded {0} file(s):</b><br />".format(len(successful))
+            n = 0
             for successful_file in successful:
+                n += 1
                 message += successful_file + "<br />"
+                if 10 <= n < n_successful:
+                    message += "...and {0} more".format(n_successful - n)
+                    break
             message += "</p>"
-        if len(failed) > 0:
-            message += "<p><b>Failed to load:</b><br />"
+        n_failed = len(failed)
+        if n_failed > 0:
+            message += "<p><b>Failed to load {0} files(s):</b><br />".format(len(failed))
+            n = 0
             for failed_file in failed:
+                n += 1
                 message += failed_file + "<br />"
+                if 10 <= n < n_failed:
+                    message += "...and {0} more".format(n_failed - n)
+                    break
             message += "</p>"
-        QMessageBox.information(self, "Import Status", message)
+            msgbox_function = QMessageBox.warning
+        msgbox_function(self, "Import Status", message)
 
 
     def reset_ui_download(self):
