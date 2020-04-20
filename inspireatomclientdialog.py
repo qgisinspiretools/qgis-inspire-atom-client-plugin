@@ -509,11 +509,13 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             num_downloads = num_selected
         else:
             num_downloads = len(datasetrepresentation.getFiles())
-        if self.currentfile < len(datasetrepresentation.getFiles()):
-            if num_selected > 0 and not self.lwFiles.item(self.currentfile).isSelected():
+
+        if num_selected > 0 and self.currentdownload < num_downloads:
+            # skip files not selected for download
+            while not self.lwFiles.item(self.currentfile).isSelected() and self.currentfile < num_downloads:
                 self.currentfile += 1
-                self.download_next()
-                return
+
+        if self.currentdownload <= num_downloads:
             self.cmdGetFeed.setEnabled(False)
             self.cmdDownload.setEnabled(False)
             self.cmdSelectDataset.setEnabled(False)
@@ -536,15 +538,35 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         failed = []
         successful = []
         for downloaded_file in self.downloadedfiles:
-            vlayer = QgsVectorLayer(downloaded_file, downloaded_file, "ogr")
-            if not vlayer.isValid():
-                # fileInfo = QFileInfo(file)
-                # baseName = fileInfo.baseName()
+            is_ogr = False
+            try_ogr = True
+            # avoid trying to open using OGR for file-types which are not handled by OGR
+            # TODO inspect MIME-type of file
+            if downloaded_file.endswith('.bmp') \
+                    or downloaded_file.endswith('.gif') \
+                    or downloaded_file.endswith('.jpeg') \
+                    or downloaded_file.endswith('.jpg') \
+                    or downloaded_file.endswith('.png') \
+                    or downloaded_file.endswith('.tif') \
+                    or downloaded_file.endswith('.tiff'):
+                try_ogr = False
+            if try_ogr:
+                self.log_message('Trying to load {0} as vector layer'.format(downloaded_file))
+                vlayer = QgsVectorLayer(downloaded_file, downloaded_file, "ogr")
+                is_ogr = vlayer.isValid()
+                if is_ogr:
+                    self.log_message('Successfully loaded {0} as vector layer'.format(downloaded_file))
+                else:
+                    self.log_message('{0} could not be loaded as a vector layer'.format(downloaded_file))
+            if not is_ogr:
+                self.log_message('Trying to load {0} as raster layer'.format(downloaded_file))
                 rlayer = QgsRasterLayer(downloaded_file, downloaded_file)
                 if not rlayer.isValid():
+                    self.log_message('{0} could not be loaded as a raster layer'.format(downloaded_file))
                     failed.append(downloaded_file)
                     self.lblMessage.setText("")
                 else:
+                    self.log_message('Successfully loaded {0} as raster layer'.format(downloaded_file))
                     self.add_layer(rlayer)
                     self.iface.zoomToActiveLayer()
                     successful.append(downloaded_file)
@@ -713,6 +735,16 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 extension = "zip"
             elif url.lower().find("tif") > -1:
                 extension = "tiff"
+            elif url.lower().find("png") > -1:
+                extension = "png"
+            elif url.lower().find("jpg") > -1:
+                extension = "jpeg"
+            elif url.lower().find("jpeg") > -1:
+                extension = "jpeg"
+            elif url.lower().find("gif") > -1:
+                extension = "gif"
+            elif url.lower().find("bmp") > -1:
+                extension = "bmp"
             elif url.lower().find("gml") > -1:
                 extension = "gml"
             elif url.lower().find("kml") > -1:
@@ -749,11 +781,11 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.httpRequestAborted = False
         self.progressBar.setVisible(True)
 
-        self.startRequest(url)
+        self.startRequest(url, fileName)
 
-    def startRequest(self, url):
+    def startRequest(self, url, file_name):
         self.reply = self.qnam.get(QNetworkRequest(url))
-        self.log_message('Downloading {0}'.format(url.toDisplayString()))
+        self.log_message('Downloading {0} to {1}'.format(url.toDisplayString(), str(file_name)))
         self.reply.finished.connect(self.httpRequestFinished)
         self.reply.readyRead.connect(self.httpReadyRead)
         self.reply.error.connect(self.errorOcurred)
