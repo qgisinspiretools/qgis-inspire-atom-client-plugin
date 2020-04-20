@@ -523,9 +523,9 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
             self.cmdDownload.setText(
                 "Downloading {0}/{1}".format(self.currentdownload, num_downloads))
-            file = datasetrepresentation.getFiles()[self.currentfile]
-            filename = self.buildfilename(file)
-            self.downloadFile(file, self.get_temppath(filename))
+            next_file = datasetrepresentation.getFiles()[self.currentfile]
+            filename = self.buildfilename(next_file)
+            self.downloadFile(next_file, self.get_temppath(filename))
             self.currentfile += 1
         else:
             self.load_downloaded_files()
@@ -535,35 +535,35 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def load_downloaded_files(self):
         failed = []
         successful = []
-        for file in self.downloadedfiles:
-            vlayer = QgsVectorLayer(file, file, "ogr")
+        for downloaded_file in self.downloadedfiles:
+            vlayer = QgsVectorLayer(downloaded_file, downloaded_file, "ogr")
             if not vlayer.isValid():
                 # fileInfo = QFileInfo(file)
                 # baseName = fileInfo.baseName()
-                rlayer = QgsRasterLayer(file, file)
+                rlayer = QgsRasterLayer(downloaded_file, downloaded_file)
                 if not rlayer.isValid():
-                    failed.append(file)
+                    failed.append(downloaded_file)
                     self.lblMessage.setText("")
                 else:
                     self.add_layer(rlayer)
                     self.iface.zoomToActiveLayer()
-                    successful.append(file)
+                    successful.append(downloaded_file)
             else:
                 self.lblMessage.setText("")
                 self.add_layer(vlayer)
                 self.iface.zoomToActiveLayer()
-                successful.append(file)
+                successful.append(downloaded_file)
 
         message = ""
         if len(successful) > 0:
             message += "<p><b>Successfully loaded:</b><br />"
-            for file in successful:
-                message += file + "<br />"
+            for successful_file in successful:
+                message += successful_file + "<br />"
             message += "</p>"
         if len(failed) > 0:
             message += "<p><b>Failed to load:</b><br />"
-            for file in failed:
-                message += file + "<br />"
+            for failed_file in failed:
+                message += failed_file + "<br />"
             message += "</p>"
         QMessageBox.information(self, "Import Status", message)
 
