@@ -644,16 +644,16 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         for error in errors:
             errorString += " * " + error.errorString() + "\n"
 
-        ret = QtWidgets.QMessageBox.question(
+        ret = QMessageBox.question(
             self,
             "Certificate validation error",
             "The following SSL validation errors have been reported:\n\n%s\n" \
             "This may indicate a problem with the server and/or its certificate.\n\n" \
             "Do you wish to continue anyway?" % errorString,
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+            QMessageBox.Yes | QMessageBox.No
         )
 
-        if ret == QtWidgets.QMessageBox.Yes:
+        if ret == QMessageBox.Yes:
             self.log_message("Ignoring SSL errors", Qgis.Warning)
             reply.ignoreSslErrors()
         else:
