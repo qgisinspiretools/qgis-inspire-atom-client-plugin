@@ -119,7 +119,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         if not vlayer.isValid():
             QMessageBox.critical(self, "QGIS-Layer Error", "Response is not a valid QGIS-Layer!")
         else:
-            self.add_layer(vlayer)
+            self.add_layer(vlayer, tmpfile, layer_args=["ogr"])
             self.iface.mapCanvas().setCurrentLayer(vlayer)
             self.layername = vlayer.name()
             self.iface.zoomToActiveLayer()
@@ -540,6 +540,9 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         for downloaded_file in self.downloadedfiles:
             is_ogr = False
             try_ogr = True
+            add_layer = True
+            layer_class = None
+            layer_args = []
             # avoid trying to open using OGR for file-types which are not handled by OGR
             # TODO inspect MIME-type of file
             if downloaded_file.endswith('.bmp') \
@@ -552,27 +555,29 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 try_ogr = False
             if try_ogr:
                 self.log_message('Trying to load {0} as vector layer'.format(downloaded_file))
-                vlayer = QgsVectorLayer(downloaded_file, downloaded_file, "ogr")
-                is_ogr = vlayer.isValid()
+                layer = QgsVectorLayer(downloaded_file, downloaded_file, "ogr")
+                is_ogr = layer.isValid()
                 if is_ogr:
                     self.log_message('Successfully loaded {0} as vector layer'.format(downloaded_file))
+                    add_layer = True
+                    layer_class = QgsVectorLayer
+                    layer_args = ["ogr"]
                 else:
                     self.log_message('{0} could not be loaded as a vector layer'.format(downloaded_file))
             if not is_ogr:
                 self.log_message('Trying to load {0} as raster layer'.format(downloaded_file))
-                rlayer = QgsRasterLayer(downloaded_file, downloaded_file)
-                if not rlayer.isValid():
+                layer = QgsRasterLayer(downloaded_file, downloaded_file)
+                if not layer.isValid():
                     self.log_message('{0} could not be loaded as a raster layer'.format(downloaded_file))
                     failed.append(downloaded_file)
                     self.lblMessage.setText("")
                 else:
                     self.log_message('Successfully loaded {0} as raster layer'.format(downloaded_file))
-                    self.add_layer(rlayer)
-                    self.iface.zoomToActiveLayer()
-                    successful.append(downloaded_file)
-            else:
+                    add_layer = True
+                    layer_class = QgsRasterLayer
+            if add_layer:
                 self.lblMessage.setText("")
-                self.add_layer(vlayer)
+                self.add_layer(layer, downloaded_file, layer_class, layer_args)
                 self.iface.zoomToActiveLayer()
                 successful.append(downloaded_file)
 
@@ -616,9 +621,20 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self.cmdMetadata.setEnabled(True)
 
 
-    def add_layer(self, layer):
-        QgsProject.instance().addMapLayer(layer, False)
-        layerNode = self.root.insertLayer(0, layer)
+    def add_layer(self, layer, filename, layer_class = QgsVectorLayer, layer_args = [], parent_node = None):
+        project = QgsProject.instance()
+        if parent_node is None:
+            parent_node = self.root
+        if len(layer.subLayers()) > 0:
+            target = parent_node.addGroup(layer.name())
+            for sublayer in layer.suybLayers():
+                name = sublayer.split('!!::!!')[1]
+                uri = "%s|layername=%s" % (filename, name)
+                sublayerobj = layer_class(uri, name, *layer_args)
+                self.add_layer(sublayerobj, filename, layer_class, layer_args, target, True)
+        else:
+            project.addMapLayer(layer, False)
+        layerNode = parent_node.insertLayer(0, layer)
         layerNode.setExpanded(False)
         # layerNode.setVisible(Qt.Checked)
 
