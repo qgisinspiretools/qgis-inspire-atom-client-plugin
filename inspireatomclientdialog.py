@@ -815,7 +815,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.qnam.abort()
         self.close()
 
-        self.progressBar.setMaximum(1)
+        self.progressBar.setMaximum(100)
         self.progressBar.setValue(0)
         self.reset_ui_download()
 
@@ -838,13 +838,13 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.outFile.flush()
         self.outFile.close()
 
-        self.progressBar.setMaximum(1)
-        self.progressBar.setValue(1)
+        self.progressBar.setMaximum(100)
+        self.progressBar.setValue(100)
 
         self.lblMessage.setText("")
         self.downloadedfiles.append(str(self.outFile.fileName()))
         self.download_next()
-        self.progressBar.setMaximum(1)
+        self.progressBar.setMaximum(100)
         self.progressBar.setValue(0)
 
 
@@ -859,9 +859,17 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def updateDataReadProgress(self, bytesRead, totalBytes):
         if self.httpRequestAborted:
             return
-        self.progressBar.setMaximum(totalBytes)
+        if totalBytes > 0:
+            self.progressBar.setMaximum(totalBytes)
+            content_length = str(totalBytes)
+        else:
+            # server did not send a content-length header - let's assume 50% finished
+            self.progressBar.setMaximum(bytesRead * 2)
+            content_length = '???'
+
         self.progressBar.setValue(bytesRead)
-        self.lblMessage.setText("Please wait while downloading - {0} Bytes downloaded!".format(str(bytesRead)))
+        self.lblMessage.setText("Please wait while downloading - {0} / {1} Bytes downloaded!".format(str(bytesRead),
+                                                                                                     content_length))
 
 
 class MessageHandler(QtXmlPatterns.QAbstractMessageHandler):
