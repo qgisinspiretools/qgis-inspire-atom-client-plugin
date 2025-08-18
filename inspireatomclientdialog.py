@@ -18,12 +18,12 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt5 import uic
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtNetwork import *
-from PyQt5 import QtXmlPatterns
+from qgis.PyQt import uic
+from qgis.PyQt.QtCore import *
+from qgis.PyQt.QtGui import *
+from qgis.PyQt.QtWidgets import *
+from qgis.PyQt.QtNetwork import *
+from qgis.PyQt import QtXmlPatterns
 from qgis.core import *
 from xml.etree import ElementTree
 from urllib.parse import urljoin

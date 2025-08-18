@@ -18,3 +18,4 @@ tracker=https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin/issu
 repository=https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin
 author=Juergen Weichand, Stefan Ziegler, Tim Vinzing, Edward Nash
 email=e.nash@dvz-mv.de
+supportsQt6=True
