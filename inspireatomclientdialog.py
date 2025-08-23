@@ -23,7 +23,7 @@ from qgis.PyQt.QtCore import *
 from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 from qgis.PyQt.QtNetwork import *
-from qgis.PyQt import QtXmlPatterns
+# Entfernt: from PyQt6 import QtXmlPatterns
 from qgis.core import *
 from xml.etree import ElementTree
 from urllib.parse import urljoin
@@ -34,6 +34,9 @@ import random
 import tempfile
 import os
 import os.path
+
+from lxml import etree
+from io import BytesIO
 
 from .inspireatomlib import DatasetRepresentation, Dataset
 from .metadataclientdialog import MetadataClientDialog
@@ -60,15 +63,10 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
         # Connect signals
         self.cmdGetFeed.clicked.connect(self.get_service_feed)
-
         self.cmdSelectDataset.clicked.connect(self.select_dataset_feed_byclick)
-
         self.cmdDownload.clicked.connect(self.download_files)
-
         self.cmdMetadata.clicked.connect(self.show_metadata)
-
         self.cmbDatasets.currentIndexChanged.connect(self.select_dataset_feed_bylist)
-
         self.cmbDatasetRepresentations.currentIndexChanged.connect(self.update_lw_files)
 
     def init_variables(self):
@@ -103,7 +101,13 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.reply = self.qnam.get(QNetworkRequest(url))
         self.log_message("Fetching atom feed " + url.toDisplayString())
         self.reply.finished.connect(self.atomFeedMetadataFinished)
-        self.reply.error.connect(self.errorOcurred)
+        try:
+            self.reply.error.connect(self.errorOcurred)
+        except Exception:
+            try:
+                self.reply.errorOccurred.connect(self.errorOcurred)
+            except Exception:
+                pass
 
     def atomFeedMetadataFinished(self):
         self.log_message('Atom feed request finished')
@@ -165,7 +169,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
         error = self.reply.error()
         if error != QNetworkReply.NoError:
-            if not self.httpRequestAborted:
+            if not getattr(self, 'httpRequestAborted', False):
                 QMessageBox.critical(self, "HTTP Error",
                                      "Request failed: %s." % self.reply.errorString())
             return True
@@ -210,11 +214,10 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self.is_cmbDatasets_locked = False
             self.select_dataset_feed_bylist()
 
-
     # check "Service Feed Entry" for Identifier, Title, Dataset Feed Link
     def validate_feature(self, provider, feature):
         try:
-            # Dataset Identifier             
+            # Dataset Identifier
             if provider.fieldNameIndex("inspire_dls_spatial_dataset_identifier_code") > -1:
                 if len(str(feature.attribute("inspire_dls_spatial_dataset_identifier_code"))):
                     # Dataset Title
@@ -266,7 +269,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         # http://www.qgisworkshop.org/html/workshop/plugins_tutorial.html
         result = self.parent.clickTool.canvasClicked.connect(self.select_dataset_feed_byclick_procedure)
         self.iface.mapCanvas().setMapTool(self.parent.clickTool)
-
 
     # select "Dataset Feed" | Signal ("Click")
     def select_dataset_feed_byclick_procedure(self, point, button):
@@ -358,12 +360,18 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.reply = self.qnam.get(QNetworkRequest(self.url))
         self.log_message("Fetching dataset feed " + self.url.toDisplayString())
         self.reply.finished.connect(self.datasetRepReceived)
-        self.reply.error.connect(self.errorOcurred)
+        try:
+            self.reply.error.connect(self.errorOcurred)
+        except Exception:
+            try:
+                self.reply.errorOccurred.connect(self.errorOcurred)
+            except Exception:
+                pass
         QApplication.setOverrideCursor(Qt.WaitCursor)
         self.httpGetId = 0
 
     def datasetRepReceived(self):
-        self.log_message ("Dataset feed request finished")
+        self.log_message("Dataset feed request finished")
         QApplication.restoreOverrideCursor()
         if self.checkForHTTPErrors():
             return
@@ -408,7 +416,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         else:
             QMessageBox.critical(self, "INSPIRE Dataset Feed Error", "Unable to process INSPIRE Dataset Feed!")
 
-
     # update ListWidget | cmbDatasetRepresentations "currentIndexChanged(int)" Signal
     def update_lw_files(self):
         self.lwFiles.clear()
@@ -434,55 +441,47 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self.reply = self.qnam.get(QNetworkRequest(QUrl(self.currentmetadata)))
             self.log_message("Fetching metadata " + self.currentmetadata)
             self.reply.finished.connect(self.metadata_request_finished)
-            self.reply.error.connect(self.errorOcurred)
+            try:
+                self.reply.error.connect(self.errorOcurred)
+            except Exception:
+                try:
+                    self.reply.errorOccurred.connect(self.errorOcurred)
+                except Exception:
+                    pass
 
     def metadata_request_finished(self):
-        self.log_message ("Metadata request finished")
+        self.log_message("Metadata request finished")
         if self.checkForHTTPErrors():
             return
 
-        response = self.reply
+        response_content = self.reply.readAll().data()
         xslfilename = os.path.join(plugin_path, "iso19139jw.xsl")
 
-        response_content = response.readAll()
-        encoding = 'utf_8'
-        for header in response.rawHeaderPairs():
-            if header[0].toLower() == 'content-type':
-                charset_index = header[1].indexOf('charset=')
-                if charset_index > -1:
-                    encoding = str(header[1][charset_index + 8:], 'ascii')
-                    self.log_message('Got encoding from Content-Type header: {0}'.format(encoding))
-
-        encoding = encoding.lower().translate(encoding.maketrans('-', '_'))
-        self.log_message('Using encoding {0} for metadata'.format(encoding))
-
         try:
-            xml_source = str(response_content, encoding)
-        except LookupError:
-            self.log_message('Could not use encoding {0}, trying again with utf_8'.format(encoding), Qgis.Warning)
-            xml_source = str(response_content, 'utf_8')
+            xml_doc = etree.parse(BytesIO(response_content))
+            xsl_doc = etree.parse(xslfilename)
 
-        qry = QtXmlPatterns.QXmlQuery(QtXmlPatterns.QXmlQuery.XSLT20)
-        qry.setMessageHandler(MessageHandler())
-        qry.setFocus(xml_source)
-        qry.setQuery(QUrl('file:///' + xslfilename))
+            transform = etree.XSLT(xsl_doc)  # XSLT 1.0
+            result_tree = transform(xml_doc)
+            html = str(result_tree)
 
-        html = qry.evaluateToString()
+            if html:
+                dlg = MetadataClientDialog()
+                dlg.wvMetadata.setHtml(html)
+                dlg.show()
+                dlg.exec_()
+            else:
+                QMessageBox.critical(self, "Metadata Error", "Unable to read the Metadata")
 
-        if html:
-            # create and show the dialog
-            dlg = MetadataClientDialog()
-            dlg.wvMetadata.setHtml(html)
-            # show the dialog
-            dlg.show()
-            result = dlg.exec_()
-            # See if OK was pressed
-            if result == 1:
-                # do something useful (delete the line containing pass and
-                # substitute with your code
-                pass
-        else:
-            QMessageBox.critical(self, "Metadata Error", "Unable to read the Metadata")
+        except etree.XMLSyntaxError as err:
+            QMessageBox.critical(self, "XML Parsing error", f"The metadata could not be read:\n{err}")
+        except etree.XSLTParseError as err:
+            QMessageBox.critical(
+                self, "XSLT error",
+                "The XSLT could not be parsed (possible XSLT 2.0?):\n{0}".format(err)
+            )
+        except etree.XSLTApplyError as err:
+            QMessageBox.critical(self, "XSLT error", f"Transformation failed:\n{err}")
 
     """
     ############################################################################################################################
@@ -608,7 +607,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             msgbox_function = QMessageBox.warning
         msgbox_function(self, "Import Status", message)
 
-
     def reset_ui_download(self):
         self.cmdDownload.setText("Download")
         self.cmdDownload.setEnabled(True)
@@ -620,18 +618,17 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         if len(self.currentmetadata) > 0:
             self.cmdMetadata.setEnabled(True)
 
-
     def add_layer(self, layer, filename, layer_class = QgsVectorLayer, layer_args = [], parent_node = None):
         project = QgsProject.instance()
         if parent_node is None:
             parent_node = self.root
         if len(layer.subLayers()) > 0:
             target = parent_node.addGroup(layer.name())
-            for sublayer in layer.suybLayers():
+            for sublayer in layer.subLayers():  # korrigiert
                 name = sublayer.split('!!::!!')[1]
                 uri = "%s|layername=%s" % (filename, name)
                 sublayerobj = layer_class(uri, name, *layer_args)
-                self.add_layer(sublayerobj, filename, layer_class, layer_args, target, True)
+                self.add_layer(sublayerobj, filename, layer_class, layer_args, target)
         else:
             project.addMapLayer(layer, False)
         layerNode = parent_node.insertLayer(0, layer)
@@ -722,17 +719,14 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         tmpfile = os.path.join(tmpdir, filename)
         return tmpfile
 
-
     def save_tempfile(self, filename, content):
         tmpdir = os.path.join(tempfile.gettempdir(), 'inspireatomclient')
         if not os.path.exists(tmpdir):
             os.makedirs(tmpdir)
         tmpfile = os.path.join(tmpdir, filename)
-        fobj = open(tmpfile, 'wb')
-        fobj.write(content)
-        fobj.close()
+        with open(tmpfile, 'wb') as fobj:
+            fobj.write(content)
         return tmpfile
-
 
     # Receive Proxy from QGIS-Settings
     def getProxy(self):
@@ -750,7 +744,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         if not urlfragment.startswith("http"):
             return urljoin(str(self.onlineresource), urlfragment)
         return urlfragment
-
 
     # Build filename for downloaded file
     def buildfilename(self, url):
@@ -779,7 +772,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 extension = "gml"
             elif url.lower().find("kml") > -1:
                 extension = "kml"
-
             elif url.lower().find("wfs") > -1:
                 extension = "gml"
             elif url.lower().find("wms") > -1:
@@ -818,7 +810,13 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.log_message('Downloading {0} to {1}'.format(url.toDisplayString(), str(file_name)))
         self.reply.finished.connect(self.httpRequestFinished)
         self.reply.readyRead.connect(self.httpReadyRead)
-        self.reply.error.connect(self.errorOcurred)
+        try:
+            self.reply.error.connect(self.errorOcurred)
+        except Exception:
+            try:
+                self.reply.errorOccurred.connect(self.errorOcurred)
+            except Exception:
+                pass
         self.reply.downloadProgress.connect(self.updateDataReadProgress)
 
     def httpReadyRead(self):
@@ -863,14 +861,12 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.progressBar.setMaximum(100)
         self.progressBar.setValue(0)
 
-
     def readResponseHeader(self, responseHeader):
         # Check for genuine error conditions.
         if responseHeader.statusCode() not in (200, 300, 301, 302, 303, 307):
             QMessageBox.critical(self, "Error", "Download failed: %s." % responseHeader.reasonPhrase())
             self.httpRequestAborted = True
             self.qnam.abort()
-
 
     def updateDataReadProgress(self, bytesRead, totalBytes):
         if self.httpRequestAborted:
@@ -886,9 +882,3 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.progressBar.setValue(bytesRead)
         self.lblMessage.setText("Please wait while downloading - {0} / {1} Bytes downloaded!".format(str(bytesRead),
                                                                                                      content_length))
-
-
-class MessageHandler(QtXmlPatterns.QAbstractMessageHandler):
-    def handleMessage(self, msg_type, description, identifier, source_location):
-        if 'QgsMessageLog' in globals():
-            QgsMessageLog.logMessage(str(msg_type) + description, "Wfs20Client", Qgis.Info)

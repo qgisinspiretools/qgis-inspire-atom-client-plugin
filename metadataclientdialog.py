@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 /***************************************************************************
  WfsClientDialog
@@ -9,31 +10,13 @@
         email                : juergen@weichand.de
         website              : http://www.weichand.de
  ***************************************************************************/
-
-/***************************************************************************
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- ***************************************************************************/
 """
+import os
+from qgis.PyQt import QtWidgets, uic
 
-from qgis.PyQt import uic
-from qgis.PyQt.QtWidgets import *
+UI_PATH = os.path.join(os.path.dirname(__file__), 'ui_metadataclient.ui')
 
-import os.path
-
-from .ui_metadataclient import Ui_MetadataClient
-
-class MetadataClientDialog(QDialog, Ui_MetadataClient):
-
-    def __init__(self):
-        super(MetadataClientDialog, self).__init__(None)
-        self.setupUi(self)
-
-        #QtGui.QDialog.__init__(self)
-        # Set up the user interface from Designer.
-        #self.ui = Ui_MetadataClient()
-        #self.ui.setupUi(self)
+class MetadataClientDialog(QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        uic.loadUi(UI_PATH, self)

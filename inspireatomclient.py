@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 /***************************************************************************
  InspireAtomClient
@@ -18,15 +19,13 @@
  *                                                                         *
  ***************************************************************************/
 """
+import os
 # Import the PyQt and QGIS libraries
-from qgis.PyQt.QtCore import *
-from qgis.PyQt.QtGui import *
-from qgis.PyQt.QtWidgets import *
-from qgis.core import *
-from qgis.gui import *
+from qgis.PyQt import QtCore, QtGui, QtWidgets
+from qgis.PyQt.QtCore import Qt
+from qgis.core import QgsApplication
+from qgis.gui import QgsMapToolEmitPoint
 
-# Initialize Qt resources from file resources.py
-from .resources import *
 from .inspireatomclientdialog import InspireAtomClientDialog
 
 class InspireAtomClient:
@@ -35,16 +34,26 @@ class InspireAtomClient:
         # Save reference to the QGIS interface
         self.iface = iface
         self.clickTool = QgsMapToolEmitPoint(self.iface.mapCanvas())
+        plugin_dir = os.path.dirname(__file__)
+        QtCore.QDir.addSearchPath("iac", plugin_dir)
+        self.action = None
+        self.aboutAction = None
 
     def initGui(self):
         # Create action that will start plugin configuration
-        self.action = QAction(QIcon(":/plugins/inspireatomclient/icon.png"), \
-            "INSPIRE Atom Client", self.iface.mainWindow())
+        self.action = QtWidgets.QAction(
+            QtGui.QIcon("iac:icon.png"),
+            "INSPIRE Atom Client",
+            self.iface.mainWindow()
+        )
         # connect the action to the run method
         self.action.triggered.connect(self.run)
 
-        self.aboutAction=QAction(QIcon(":/plugins/wfsclient/icon.png"), \
-            "About", self.iface.mainWindow())
+        self.aboutAction = QtWidgets.QAction(
+            QtGui.QIcon("iac:icon.png"),
+            "About",
+            self.iface.mainWindow()
+        )
         self.aboutAction.triggered.connect(self.about)
 
         # Add toolbar button and menu item
