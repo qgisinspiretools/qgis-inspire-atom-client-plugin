@@ -23,7 +23,6 @@ from qgis.PyQt.QtCore import *
 from qgis.PyQt.QtGui import *
 from qgis.PyQt.QtWidgets import *
 from qgis.PyQt.QtNetwork import *
-# Entfernt: from PyQt6 import QtXmlPatterns
 from qgis.core import *
 from xml.etree import ElementTree
 from urllib.parse import urljoin
@@ -95,7 +94,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.httpGetId = 0
         self.url = QUrl(request)
 
-        self.startAtomFeedMetadataRequest(self.url)
+        self.startAtomFeedquest(self.url)
 
     def startAtomFeedMetadataRequest(self, url):
         self.reply = self.qnam.get(QNetworkRequest(url))
@@ -450,38 +449,58 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                     pass
 
     def metadata_request_finished(self):
-        self.log_message("Metadata request finished")
+        self.log_message ("Metadata request finished")
         if self.checkForHTTPErrors():
             return
 
-        response_content = self.reply.readAll().data()
+        response = self.reply
         xslfilename = os.path.join(plugin_path, "iso19139jw.xsl")
 
+        response_content = response.readAll()
+        encoding = 'utf_8'
+        for header in response.rawHeaderPairs():
+            if header[0].toLower() == 'content-type':
+                charset_index = header[1].indexOf('charset=')
+                if charset_index > -1:
+                    encoding = str(header[1][charset_index + 8:], 'ascii')
+                    self.log_message('Got encoding from Content-Type header: {0}'.format(encoding))
+
+        encoding = encoding.lower().translate(encoding.maketrans('-', '_'))
+        self.log_message('Using encoding {0} for metadata'.format(encoding))
+
         try:
-            xml_doc = etree.parse(BytesIO(response_content))
-            xsl_doc = etree.parse(xslfilename)
+            xml_source = str(response_content, encoding)
+        except LookupError:
+            self.log_message('Could not use encoding {0}, trying again with utf_8'.format(encoding), Qgis.Warning)
+            xml_source = str(response_content, 'utf_8')
 
-            transform = etree.XSLT(xsl_doc)  # XSLT 1.0
-            result_tree = transform(xml_doc)
+            # Perform XSLT transformation with lxml
+        try:
+            # Load the XSLT file
+            xslt_tree = etree.parse(xslfilename)
+            transform = etree.XSLT(xslt_tree)
+            # Parse XML data
+            xml_tree = etree.fromstring(xml_source.encode("utf-8"))
+            # Perform the transformation
+            result_tree = transform(xml_tree)
+            # Convert the result to a string
             html = str(result_tree)
-
+            # Display the transformed HTML in the dialog
             if html:
                 dlg = MetadataClientDialog()
                 dlg.wvMetadata.setHtml(html)
                 dlg.show()
-                dlg.exec_()
+                result = dlg.exec_()
+                if result == 1:
+                    pass
             else:
-                QMessageBox.critical(self, "Metadata Error", "Unable to read the Metadata")
+                QMessageBox.critical(
+                    self, "Metadata Error", "Unable to read the Metadata"
+                )
+        except (etree.XMLSyntaxError, etree.XSLTApplyError) as e:
+            self.log_message(f"XSLT processing error: {e}", Qgis.Critical)
+            QMessageBox.critical(self, "XSLT Error", f"XSLT processing error: {e}")
 
-        except etree.XMLSyntaxError as err:
-            QMessageBox.critical(self, "XML Parsing error", f"The metadata could not be read:\n{err}")
-        except etree.XSLTParseError as err:
-            QMessageBox.critical(
-                self, "XSLT error",
-                "The XSLT could not be parsed (possible XSLT 2.0?):\n{0}".format(err)
-            )
-        except etree.XSLTApplyError as err:
-            QMessageBox.critical(self, "XSLT error", f"Transformation failed:\n{err}")
 
     """
     ############################################################################################################################
