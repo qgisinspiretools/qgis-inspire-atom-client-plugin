@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 /***************************************************************************
  InspireAtomClientDialog
@@ -58,7 +59,11 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.settings = QSettings()
         self.init_variables()
 
-        self.txtPassword.setEchoMode(QLineEdit.Password)
+        # PyQt6 / PyQt5 kompatible Einstellung für Passwort-Echo
+        try:
+            self.txtPassword.setEchoMode(QLineEdit.EchoMode.Password)
+        except AttributeError:
+            self.txtPassword.setEchoMode(QLineEdit.Password)
 
         # Connect signals
         self.cmdGetFeed.clicked.connect(self.get_service_feed)
@@ -67,6 +72,18 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.cmdMetadata.clicked.connect(self.show_metadata)
         self.cmbDatasets.currentIndexChanged.connect(self.select_dataset_feed_bylist)
         self.cmbDatasetRepresentations.currentIndexChanged.connect(self.update_lw_files)
+
+    # ---------- Helfer: Busy-Cursor (PyQt6-/PyQt5-kompatibel) ----------
+    def set_busy_cursor(self, on: bool = True):
+        # PyQt6: Qt.CursorShape.WaitCursor | PyQt5: Qt.WaitCursor
+        try:
+            wait_shape = Qt.CursorShape.WaitCursor  # PyQt6
+        except AttributeError:
+            wait_shape = Qt.WaitCursor              # PyQt5
+        if on:
+            QApplication.setOverrideCursor(QCursor(wait_shape))
+        else:
+            QApplication.restoreOverrideCursor()
 
     def init_variables(self):
         self.onlineresource = ""
@@ -85,7 +102,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     # request and handle "Service Feed" - Get Metadata | cmdGetFeed Signal
     def get_service_feed(self):
         self.init_variables()
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.set_busy_cursor(True)
 
         self.onlineresource = self.txtUrl.text().strip()
         request = str(self.onlineresource)
@@ -94,7 +111,8 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.httpGetId = 0
         self.url = QUrl(request)
 
-        self.startAtomFeedquest(self.url)
+        # Bugfix: richtiger Methodenname
+        self.startAtomFeedMetadataRequest(self.url)
 
     def startAtomFeedMetadataRequest(self, url):
         self.reply = self.qnam.get(QNetworkRequest(url))
@@ -111,6 +129,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def atomFeedMetadataFinished(self):
         self.log_message('Atom feed request finished')
         if self.checkForHTTPErrors():
+            self.set_busy_cursor(False)
             return
 
         buf = self.reply.readAll().data()
@@ -133,41 +152,57 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self.cmdGetFeed.setEnabled(False)
             self.txtUrl.setEnabled(False)
 
-        QApplication.restoreOverrideCursor()
+        self.set_busy_cursor(False)
 
     def checkForHTTPErrors(self):
-        http_code = self.reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        # --- HTTP-Statuscode ermitteln (PyQt5/6-kompatibel) ---
+        try:
+            # PyQt6: QNetworkRequest.Attribute.HttpStatusCodeAttribute
+            # PyQt5: QNetworkRequest.HttpStatusCodeAttribute
+            try:
+                http_status_attr = QNetworkRequest.Attribute.HttpStatusCodeAttribute
+            except AttributeError:
+                http_status_attr = QNetworkRequest.HttpStatusCodeAttribute
+
+            http_code = self.reply.attribute(http_status_attr)
+        except Exception:
+            http_code = None
+
         if http_code is not None:
             self.log_message('Request finished with HTTP code {0}'.format(http_code))
         else:
             self.log_message('Request finished with no HTTP code (aborted?)')
 
+        # Häufige Statuscodes abfangen
         if http_code == 401:
-            QMessageBox.critical(
-                self,
-                "HTTP 401 Unauthorized",
-                "Authentication is required for this request"
-            )
+            QMessageBox.critical(self, "HTTP 401 Unauthorized",
+                                 "Authentication is required for this request")
             return True
 
         if http_code == 403:
-            QMessageBox.critical(
-                self,
-                "HTTP 403 Forbidden",
-                "Your authentication is insufficient for this request"
-            )
+            QMessageBox.critical(self, "HTTP 403 Forbidden",
+                                 "Your authentication is insufficient for this request")
             return True
 
         if http_code == 404:
-            QMessageBox.critical(
-                self,
-                "HTTP 404 Not Found",
-                "The specified resource was not found - is the URL correct?"
-            )
+            QMessageBox.critical(self, "HTTP 404 Not Found",
+                                 "The specified resource was not found - is the URL correct?")
             return True
 
-        error = self.reply.error()
-        if error != QNetworkReply.NoError:
+        # --- Netzwerkfehler prüfen (PyQt5/6-kompatibel) ---
+        try:
+            error = self.reply.error()
+        except Exception:
+            error = None
+
+        # PyQt6: QNetworkReply.NetworkError.NoError
+        # PyQt5: QNetworkReply.NoError
+        try:
+            no_error_value = QNetworkReply.NetworkError.NoError
+        except AttributeError:
+            no_error_value = QNetworkReply.NoError
+
+        if error is not None and error != no_error_value:
             if not getattr(self, 'httpRequestAborted', False):
                 QMessageBox.critical(self, "HTTP Error",
                                      "Request failed: %s." % self.reply.errorString())
@@ -366,12 +401,12 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 self.reply.errorOccurred.connect(self.errorOcurred)
             except Exception:
                 pass
-        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.set_busy_cursor(True)
         self.httpGetId = 0
 
     def datasetRepReceived(self):
         self.log_message("Dataset feed request finished")
-        QApplication.restoreOverrideCursor()
+        self.set_busy_cursor(False)
         if self.checkForHTTPErrors():
             return
 
@@ -474,7 +509,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self.log_message('Could not use encoding {0}, trying again with utf_8'.format(encoding), Qgis.Warning)
             xml_source = str(response_content, 'utf_8')
 
-            # Perform XSLT transformation with lxml
+        # Perform XSLT transformation with lxml
         try:
             # Load the XSLT file
             xslt_tree = etree.parse(xslfilename)
@@ -490,7 +525,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                 dlg = MetadataClientDialog()
                 dlg.wvMetadata.setHtml(html)
                 dlg.show()
-                result = dlg.exec_()
+                result = dlg.exec()
                 if result == 1:
                     pass
             else:
@@ -652,7 +687,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             project.addMapLayer(layer, False)
         layerNode = parent_node.insertLayer(0, layer)
         layerNode.setExpanded(False)
-        # layerNode.setVisible(Qt.Checked)
+        # layerNode.setVisible(Qt.CheckState.Checked)
 
     """
     ############################################################################################################################

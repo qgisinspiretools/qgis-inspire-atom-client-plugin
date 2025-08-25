@@ -110,7 +110,7 @@ class InspireAtomClient:
 		# Dialog is placed in a corner?
         #dlg.setWindowFlags(Qt.WindowStaysOnTopHint)
         dlg.show()
-        result = dlg.exec_()
+        result = dlg.exec()
         # See if OK was pressed
         if result == 1:
             # do something useful (delete the line containing pass and
