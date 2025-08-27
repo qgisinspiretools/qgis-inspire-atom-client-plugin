@@ -484,7 +484,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
                     pass
 
     def metadata_request_finished(self):
-        self.log_message ("Metadata request finished")
+        self.log_message("Metadata request finished")
         if self.checkForHTTPErrors():
             return
 
@@ -493,37 +493,63 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
         response_content = response.readAll()
         encoding = 'utf_8'
-        for header in response.rawHeaderPairs():
-            if header[0].toLower() == 'content-type':
-                charset_index = header[1].indexOf('charset=')
-                if charset_index > -1:
-                    encoding = str(header[1][charset_index + 8:], 'ascii')
-                    self.log_message('Got encoding from Content-Type header: {0}'.format(encoding))
 
-        encoding = encoding.lower().translate(encoding.maketrans('-', '_'))
+        # ---------- Encoding aus Content-Type Header ermitteln ----------
+        def _to_str(x):
+            if isinstance(x, (QByteArray, bytes, bytearray, memoryview)):
+                return bytes(x).decode('ascii', errors='ignore')
+            return str(x) if x is not None else ''
+
+        try:
+            # PyQt6
+            ct = response.header(QNetworkRequest.KnownHeaders.ContentTypeHeader)
+        except AttributeError:
+            # PyQt5
+            try:
+                ct = response.header(QNetworkRequest.ContentTypeHeader)
+            except Exception:
+                ct = None
+
+        ct_str = _to_str(ct)
+        pos = ct_str.lower().find('charset=')
+        if pos > -1:
+            encoding = ct_str[pos + 8:].strip()
+        else:
+            # Fallback: rohe Header-Paare durchsuchen
+            try:
+                for name_b, value_b in response.rawHeaderPairs():
+                    name = _to_str(name_b).lower()
+                    if 'content-type' in name:
+                        v = _to_str(value_b)
+                        pos2 = v.lower().find('charset=')
+                        if pos2 > -1:
+                            encoding = v[pos2 + 8:].strip()
+                            break
+            except Exception:
+                pass
+
+        # Normalisieren (z.B. utf-8 -> utf_8 für Python codec)
+        encoding = encoding.lower().replace('-', '_')
         self.log_message('Using encoding {0} for metadata'.format(encoding))
 
+        # ---------- XML-Quelle decodieren ----------
         try:
             xml_source = str(response_content, encoding)
         except LookupError:
             self.log_message('Could not use encoding {0}, trying again with utf_8'.format(encoding), Qgis.Warning)
             xml_source = str(response_content, 'utf_8')
 
-        # Perform XSLT transformation with lxml
+        # ---------- XSLT-Transformation ----------
         try:
-            # Load the XSLT file
             xslt_tree = etree.parse(xslfilename)
             transform = etree.XSLT(xslt_tree)
-            # Parse XML data
             xml_tree = etree.fromstring(xml_source.encode("utf-8"))
-            # Perform the transformation
             result_tree = transform(xml_tree)
-            # Convert the result to a string
             html = str(result_tree)
-            # Display the transformed HTML in the dialog
+
             if html:
                 dlg = MetadataClientDialog()
-                dlg.wvMetadata.setHtml(html)
+                dlg.set_html(html)
                 dlg.show()
                 result = dlg.exec()
                 if result == 1:
@@ -535,7 +561,6 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         except (etree.XMLSyntaxError, etree.XSLTApplyError) as e:
             self.log_message(f"XSLT processing error: {e}", Qgis.Critical)
             QMessageBox.critical(self, "XSLT Error", f"XSLT processing error: {e}")
-
 
     """
     ############################################################################################################################
