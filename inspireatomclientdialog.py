@@ -848,7 +848,11 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             QFile.remove(fileName)
 
         self.outFile = QFile(fileName)
-        if not self.outFile.open(QIODevice.WriteOnly):
+        try:
+            mode = QIODevice.OpenModeFlag.WriteOnly  # PyQt6
+        except AttributeError:
+            mode = QIODevice.WriteOnly  # PyQt5
+        if not self.outFile.open(mode):
             QMessageBox.critical(self, "Error",
                                  "Unable to save the file %s: %s." % (fileName, self.outFile.errorString()))
             self.outFile = None
