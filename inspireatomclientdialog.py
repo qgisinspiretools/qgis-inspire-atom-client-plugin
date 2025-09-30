@@ -300,44 +300,72 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def select_dataset_feed_byclick(self):
         self.clear_frame()
         self.lblMessage.setText("")
-        # http://www.qgisworkshop.org/html/workshop/plugins_tutorial.html
-        result = self.parent.clickTool.canvasClicked.connect(self.select_dataset_feed_byclick_procedure)
+        try:
+            self._old_modality = self.windowModality()
+        except Exception:
+            self._old_modality = None
+        self.setWindowModality(Qt.NonModal)
+        self.setEnabled(False)
+
+        try:
+            self.parent.clickTool.canvasClicked.disconnect(self.select_dataset_feed_byclick_procedure)
+        except Exception:
+            pass
+        self.parent.clickTool.canvasClicked.connect(self.select_dataset_feed_byclick_procedure)
+
         self.iface.mapCanvas().setMapTool(self.parent.clickTool)
+        self.iface.mapCanvas().setFocus()
 
     # select "Dataset Feed" | Signal ("Click")
-    def select_dataset_feed_byclick_procedure(self, point, button):
-        self.clear_frame()
-        # setup the provider select to filter results based on a rectangle
+    def select_dataset_feed_byclick_procedure(self, *args):
+        if not args:
+            return
+        point = args[0]
+
         pntGeom = QgsGeometry.fromPointXY(point)
-        # scale-dependent buffer of 2 pixels-worth of map units
         pntBuff = pntGeom.buffer((self.iface.mapCanvas().mapUnitsPerPixel() * 2), 0)
         rect = pntBuff.boundingBox()
-        # get currentLayer and dataProvider
+
         cLayer = self.iface.mapCanvas().currentLayer()
-        if not cLayer.name() == self.layername:
-            QMessageBox.critical(self, "QGIS-Layer Error", "Selected Layer isn't the INSPIRE Service Feed!")
-            result = self.parent.clickTool.canvasClicked.disconnect(self.select_dataset_feed_byclick_procedure)
-            self.iface.mapCanvas().unsetMapTool(self.parent.clickTool)
+        if not cLayer or not cLayer.name() == self.layername:
+            QMessageBox.critical(self, "QGIS-Layer Error",
+                                 "Selected Layer isn't the INSPIRE Service Feed!")
+            self._restore_after_click()
             return
         if cLayer.type() != QgsMapLayer.VectorLayer:
+            self._restore_after_click()
             return
+
         selectList = []
         provider = cLayer.dataProvider()
+        request = QgsFeatureRequest().setFilterRect(rect)
 
-        request = QgsFeatureRequest()
-        request.setFilterRect(rect)
-
-        iter = cLayer.getFeatures(request)
-        for feature in iter:
+        for feature in cLayer.getFeatures(request):
             if feature.geometry().intersects(pntGeom):
                 selectList.append(feature.id())
                 self.handle_dataset_selection(feature, provider)
                 break
 
-        # make the actual selection
         cLayer.selectByIds(selectList)
-        result = self.parent.clickTool.canvasClicked.disconnect(self.select_dataset_feed_byclick_procedure)
-        self.iface.mapCanvas().unsetMapTool(self.parent.clickTool)
+        self._restore_after_click()
+
+    def _restore_after_click(self):
+        try:
+            self.parent.clickTool.canvasClicked.disconnect(self.select_dataset_feed_byclick_procedure)
+        except Exception:
+            pass
+        try:
+            self.iface.mapCanvas().unsetMapTool(self.parent.clickTool)
+        except Exception:
+            pass
+        self.setEnabled(True)
+        try:
+            if self._old_modality is not None:
+                self.setWindowModality(self._old_modality)
+        except Exception:
+            pass
+        self.raise_()
+        self.activateWindow()
 
     # handle selection | selected by list or by click
     def handle_dataset_selection(self, feature, provider):
