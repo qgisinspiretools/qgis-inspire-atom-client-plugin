@@ -304,7 +304,11 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             self._old_modality = self.windowModality()
         except Exception:
             self._old_modality = None
-        self.setWindowModality(Qt.NonModal)
+        try:
+            non_modal = Qt.NonModal  # Qt5
+        except AttributeError:
+            non_modal = Qt.WindowModality.NonModal  # Qt6
+        self.setWindowModality(non_modal)
         self.setEnabled(False)
 
         try:
