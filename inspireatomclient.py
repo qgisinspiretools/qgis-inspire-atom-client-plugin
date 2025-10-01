@@ -25,6 +25,8 @@ from qgis.PyQt import QtCore, QtGui, QtWidgets
 from qgis.PyQt.QtCore import Qt
 from qgis.core import QgsApplication
 from qgis.gui import QgsMapToolEmitPoint
+from qgis.PyQt.QtWidgets import QMessageBox
+
 
 from .inspireatomclientdialog import InspireAtomClientDialog
 
