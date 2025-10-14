@@ -73,7 +73,7 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.cmbDatasets.currentIndexChanged.connect(self.select_dataset_feed_bylist)
         self.cmbDatasetRepresentations.currentIndexChanged.connect(self.update_lw_files)
 
-    # ---------- Helfer: Busy-Cursor (PyQt6-/PyQt5-kompatibel) ----------
+    # ---------- helper: busy-cursor (PyQt6-/PyQt5-compatible) ----------
     def set_busy_cursor(self, on: bool = True):
         # PyQt6: Qt.CursorShape.WaitCursor | PyQt5: Qt.WaitCursor
         try:
@@ -84,6 +84,13 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
             QApplication.setOverrideCursor(QCursor(wait_shape))
         else:
             QApplication.restoreOverrideCursor()
+
+    # Qt5 / Qt6 compatibility helper for QNetworkRequest attributes
+    def _nr_attr(name):
+        try:
+            return getattr(QNetworkRequest.Attribute, name)
+        except Exception:
+            return getattr(QNetworkRequest, name)
 
     def init_variables(self):
         self.onlineresource = ""
@@ -111,11 +118,15 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.httpGetId = 0
         self.url = QUrl(request)
 
-        # Bugfix: richtiger Methodenname
+        #  correct method name
         self.startAtomFeedMetadataRequest(self.url)
 
     def startAtomFeedMetadataRequest(self, url):
-        self.reply = self.qnam.get(QNetworkRequest(url))
+        # build explicit request object (easier to set attributes later if needed)
+        req = QNetworkRequest(url)
+        # We do NOT enable automatic FollowRedirects here because we want
+        # to ask the user before forwarding authentication etc.
+        self.reply = self.qnam.get(req)
         self.log_message("Fetching atom feed " + url.toDisplayString())
         self.reply.finished.connect(self.atomFeedMetadataFinished)
         try:
@@ -128,6 +139,44 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
 
     def atomFeedMetadataFinished(self):
         self.log_message('Atom feed request finished')
+
+        # --- Redirect handling (Qt5/Qt6 robust) ---
+        try:
+            redir_attr = _nr_attr("RedirectionTargetAttribute")
+            redirectionTarget = self.reply.attribute(redir_attr)
+        except Exception:
+            redirectionTarget = None
+
+        if redirectionTarget is not None:
+            # resolve relative Location header
+            newUrl = self.url.resolved(redirectionTarget)
+
+            # abort current reply
+            try:
+                self.reply.abort()
+                self.reply.deleteLater()
+            except Exception:
+                pass
+            self.reply = None
+
+            ret = QMessageBox.question(
+                self,
+                "HTTP Location redirect",
+                "The server wants to redirect your request to\n%s\n\nDo you wish to follow this redirect?\n\n"
+                "Any authentication details will also be forwarded!" % newUrl.toString(),
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+            if ret == QMessageBox.Yes:
+                self.url = newUrl
+                self.startAtomFeedMetadataRequest(self.url)
+                return
+
+            # user declined; stop
+            self.set_busy_cursor(False)
+            return
+
+        # no redirect — proceed with normal error handling
         if self.checkForHTTPErrors():
             self.set_busy_cursor(False)
             return
@@ -439,6 +488,38 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
     def datasetRepReceived(self):
         self.log_message("Dataset feed request finished")
         self.set_busy_cursor(False)
+
+        # Redirect handling
+        try:
+            redir_attr = _nr_attr("RedirectionTargetAttribute")
+            redirectionTarget = self.reply.attribute(redir_attr)
+        except Exception:
+            redirectionTarget = None
+
+        if redirectionTarget is not None:
+            newUrl = self.url.resolved(redirectionTarget)
+            try:
+                self.reply.abort()
+                self.reply.deleteLater()
+            except Exception:
+                pass
+            self.reply = None
+
+            ret = QMessageBox.question(
+                self,
+                "HTTP Location redirect",
+                "The server wants to redirect your request to\n%s\n\nDo you wish to follow this redirect?\n\n"
+                "Any authentication details will also be forwarded!" % newUrl.toString(),
+                QMessageBox.Yes | QMessageBox.No
+            )
+
+            if ret == QMessageBox.Yes:
+                self.url = newUrl
+                self.receive_dataset_representations(self.url.toString())
+                return
+
+            return
+
         if self.checkForHTTPErrors():
             return
 
@@ -921,7 +1002,14 @@ class InspireAtomClientDialog(QDialog, FORM_CLASS):
         self.startRequest(url, fileName)
 
     def startRequest(self, url, file_name):
-        self.reply = self.qnam.get(QNetworkRequest(url))
+        req = QNetworkRequest(url)
+        try:
+            follow_attr = _nr_attr("FollowRedirectsAttribute")
+            req.setAttribute(follow_attr, True)
+        except Exception:
+            # setAttribute may not exist on older Qt; ignore
+            pass
+        self.reply = self.qnam.get(req)
         self.log_message('Downloading {0} to {1}'.format(url.toDisplayString(), str(file_name)))
         self.reply.finished.connect(self.httpRequestFinished)
         self.reply.readyRead.connect(self.httpReadyRead)
