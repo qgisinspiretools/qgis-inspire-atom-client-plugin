@@ -16,6 +16,6 @@ class_name=InspireAtomClient
 website=https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin
 tracker=https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin/issues
 repository=https://github.com/qgisinspiretools/qgis-inspire-atom-client-plugin
-author=Juergen Weichand, Stefan Ziegler, Tim Vinzing, Edward Nash
+author=Juergen Weichand, Stefan Ziegler, Tim Vinzing, Edward Nash, Wilhelm Beiche
 email=e.nash@dvz-mv.de
 supportsQt6=True

@@ -100,6 +100,8 @@ class InspireAtomClient:
                      "<tr><td>Author:</td><td>Stefan Ziegler</td></tr>" \
                      "<tr><td colspan=\"2\"><b>QGIS 3.x Migration</b></td></tr></tr>" \
                      "<tr><td>Author:</td><td>Tim Vinzing</td></tr>" \
+                     "<tr><td colspan=\"2\"><b>QGIS QT6 Migration</b></td></tr></tr>" \
+                     "<tr><td>Author:</td><td>Wilhelm Beiche</td></tr>" \
                      "</table>"
         QMessageBox.information(self.iface.mainWindow(), "About INSPIRE Atom Client", infoString)
 
