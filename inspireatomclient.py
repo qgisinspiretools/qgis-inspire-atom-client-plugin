@@ -83,7 +83,7 @@ class InspireAtomClient:
 
     def about(self):
         infoString = "<table>" \
-                     "<tr><td colspan=\"2\"><b>INSPIRE Atom Client 0.8.1</b></td></tr><tr>" \
+                     "<tr><td colspan=\"2\"><b>INSPIRE Atom Client 0.9.0</b></td></tr><tr>" \
                      "<td colspan=\"2\">Experimental Plugin</td></tr>" \
                      "<tr><td colspan=\"2\"></td></tr>" \
                      "<tr><td rowspan=\"2\">Authors:</td>" \

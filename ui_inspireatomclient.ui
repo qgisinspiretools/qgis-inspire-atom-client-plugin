@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>INSPIRE Atom Client 0.8.1</string>
+   <string>INSPIRE Atom Client 0.9.0</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_3">
    <item row="5" column="0">
